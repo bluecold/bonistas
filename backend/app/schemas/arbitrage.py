@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, Any, Dict
 from datetime import datetime
 from decimal import Decimal
 
@@ -14,6 +14,9 @@ class ArbitrageSignalBase(BaseModel):
     action_recommended: str
     status: str = "ACTIVE"
     notes: Optional[str] = None
+    net_profit_pct: Optional[float] = None
+    confirmation: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
 
 class ArbitrageSignalCreate(ArbitrageSignalBase):
     timestamp: Optional[datetime] = None
@@ -21,5 +24,7 @@ class ArbitrageSignalCreate(ArbitrageSignalBase):
 class ArbitrageSignalResponse(ArbitrageSignalBase):
     id: int
     timestamp: datetime
+    first_seen: Optional[datetime] = None
+    last_seen: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 

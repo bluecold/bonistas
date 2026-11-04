@@ -66,7 +66,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <h1 class="text-base font-extrabold tracking-tight text-white">Bonistas Trading</h1>
-                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono font-semibold">ARBITRAGE v1.0</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono font-semibold">ARBITRAGE v1.1</span>
                     </div>
                     <p class="text-[11px] text-slate-400">Renta Fija & Arbitraje de Curvas Soberanas</p>
                 </div>
@@ -120,6 +120,15 @@
                 <i data-lucide="target" class="w-4 h-4"></i>
                 <span>Command Center Arbitrajes</span>
                 <span id="signals-badge" class="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold font-mono">0</span>
+            </button>
+            <button onclick="switchTab('tab-ci', this)" id="tab-btn-ci" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+                <span>CI vs 24hs</span>
+                <span id="ci-badge" class="px-2 py-0.5 rounded-full bg-slate-700 text-white text-[10px] font-bold font-mono">0</span>
+            </button>
+            <button onclick="switchTab('tab-fx', this)" id="tab-btn-fx" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+                <i data-lucide="dollar-sign" class="w-4 h-4"></i>
+                <span>Dólar implícito</span>
             </button>
             <button onclick="switchTab('tab-swap', this)" id="tab-btn-swap" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
@@ -211,6 +220,28 @@
         <!-- TAB 3: COMMAND CENTER DE ARBITRAJES -->
         <!-- ========================================== -->
         <section id="tab-arbitrage" class="hidden space-y-5">
+            <!-- Parámetros operativos -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
+                <form id="settings-form" onsubmit="saveSettings(event)" class="flex flex-wrap items-end gap-4 text-xs">
+                    <div class="flex items-center gap-2 mr-2">
+                        <i data-lucide="sliders-horizontal" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="font-bold text-white">Parámetros operativos</span>
+                    </div>
+                    <label class="flex flex-col gap-1 text-slate-400">Costo por operación (%)
+                        <input id="set-commission" type="number" step="0.01" min="0" max="3" class="w-28 bg-brand-elevated border border-brand-border rounded-lg p-2 text-white font-mono focus:border-emerald-500 focus:outline-none">
+                    </label>
+                    <label class="flex flex-col gap-1 text-slate-400">Ganancia neta mínima (%)
+                        <input id="set-min-net" type="number" step="0.05" min="0" max="20" class="w-28 bg-brand-elevated border border-brand-border rounded-lg p-2 text-white font-mono focus:border-emerald-500 focus:outline-none">
+                    </label>
+                    <label class="flex flex-col gap-1 text-slate-400">Tamaño de operación (USD)
+                        <input id="set-size" type="number" step="50" min="1" class="w-32 bg-brand-elevated border border-brand-border rounded-lg p-2 text-white font-mono focus:border-emerald-500 focus:outline-none">
+                    </label>
+                    <button type="submit" class="px-3.5 py-2 font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition">Guardar y reevaluar</button>
+                    <span id="settings-msg" class="text-slate-400"></span>
+                    <span class="ml-auto text-[11px] text-amber-300/90">Fuente de puntas: BYMA Open Data (20 min de demora). Confirmar precios en el broker antes de operar.</span>
+                </form>
+            </div>
+
             <!-- Active Signals Section -->
             <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-2xl">
                 <div class="flex items-center justify-between mb-4">
@@ -242,12 +273,29 @@
                             <i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i>
                             Matriz de Spread de Legislación (Bonares AL vs. Globales GD)
                         </h3>
-                        <p class="text-xs text-slate-400">Monitoreo del Law Premium: Ratio = Precio GD / Precio AL (Zona de rotación a NY ≤ 1.01 | Zona rotación a ARG ≥ 1.12)</p>
+                        <p class="text-xs text-slate-400">Ratio = medio GD-D / medio AL-D (24hs). Rotar a NY si pasar de AL a GD cuesta ≤ 1,01 con costos; rotar a ARG si ratio ≥ 1,12 o z ≥ +1,5.</p>
                     </div>
                 </div>
 
                 <div id="law-matrix-container" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                     <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Ratios de curva (pares del monitor del trader) -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-2xl space-y-3">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i data-lucide="git-compare" class="w-4 h-4 text-cyan-400"></i>
+                    Ratios entre bonos de la curva (especie D)
+                </h3>
+                <p class="text-xs text-slate-400">Ratio = medio(B) / medio(A). "A→B" = nominales de B que se obtienen por cada nominal de A vendiendo a la compradora y comprando a la vendedora, con costos.</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs font-mono whitespace-nowrap">
+                        <thead class="text-slate-400 uppercase text-[10px] border-b border-brand-border">
+                            <tr><th class="px-3 py-2 text-left">Par (A / B)</th><th class="px-3 py-2">Plazo</th><th class="px-3 py-2 text-right">Ratio medio</th><th class="px-3 py-2 text-right">A→B</th><th class="px-3 py-2 text-right">B→A</th><th class="px-3 py-2 text-right">Z</th><th class="px-3 py-2 text-left">Calibración</th></tr>
+                        </thead>
+                        <tbody id="curve-ratios-body" class="divide-y divide-brand-border/60"></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -269,6 +317,64 @@
         <!-- ========================================== -->
         <!-- TAB 4: SIMULADOR DE SWAPS -->
         <!-- ========================================== -->
+        <!-- ========================================== -->
+        <!-- TAB: ARBITRAJE CI vs 24hs -->
+        <!-- ========================================== -->
+        <section id="tab-ci" class="hidden space-y-4">
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl flex flex-wrap items-center gap-4 text-xs">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Arbitraje entre plazos: Contado Inmediato vs 24hs</h2>
+                    <p id="ci-subtitle" class="text-slate-400">Misma especie, con puntas, costos, caución y ajuste por corte de cupón.</p>
+                </div>
+                <label class="ml-auto flex items-center gap-2 text-slate-300"><input id="ci-only-signals" type="checkbox" onchange="fetchCiScanner()"> Solo oportunidades ≥ mínimo</label>
+                <label class="flex items-center gap-2 text-slate-300"><input id="ci-hide-thin" type="checkbox" checked onchange="fetchCiScanner()"> Ocultar sin profundidad</label>
+            </div>
+            <div class="bg-brand-card border border-brand-border rounded-xl overflow-hidden shadow-2xl">
+                <div class="overflow-x-auto max-h-[700px] custom-scrollbar">
+                    <table class="w-full text-left text-xs whitespace-nowrap">
+                        <thead class="bg-brand-elevated text-slate-400 uppercase text-[10px] font-semibold border-b border-brand-border sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2.5">Especie</th><th class="px-3 py-2.5">Operación</th>
+                                <th class="px-3 py-2.5 text-right">Vender a</th><th class="px-3 py-2.5 text-right">Comprar a</th>
+                                <th class="px-3 py-2.5 text-right">VN</th><th class="px-3 py-2.5 text-right">Bruto</th>
+                                <th class="px-3 py-2.5 text-right">Costos</th><th class="px-3 py-2.5 text-right">Caución</th>
+                                <th class="px-3 py-2.5 text-right">Ajuste cupón</th><th class="px-3 py-2.5 text-right text-emerald-400">Neto</th>
+                                <th class="px-3 py-2.5">Notas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ci-table-body" class="divide-y divide-brand-border/60 font-mono"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB: DÓLAR IMPLÍCITO -->
+        <!-- ========================================== -->
+        <section id="tab-fx" class="hidden space-y-4">
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl flex flex-wrap items-center gap-3 text-xs">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Dólar implícito ejecutable por bono</h2>
+                    <p class="text-slate-400">Tipo de cambio que se obtiene operando cada bono en pesos y en dólares, con puntas y costos incluidos.</p>
+                </div>
+                <div class="ml-auto flex gap-1.5">
+                    <button onclick="setFxKind('MEP')" id="fx-btn-MEP" class="px-3 py-1.5 rounded-lg font-bold bg-emerald-500 text-slate-950">MEP (D)</button>
+                    <button onclick="setFxKind('CCL')" id="fx-btn-CCL" class="px-3 py-1.5 rounded-lg font-semibold bg-brand-elevated text-slate-300">Cable (C)</button>
+                </div>
+            </div>
+            <div id="fx-roundtrips" class="grid gap-3 md:grid-cols-2"></div>
+            <div class="grid gap-4 lg:grid-cols-2">
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase mb-2">Más barato para COMPRAR dólares</h3>
+                    <table class="w-full text-xs font-mono"><thead class="text-slate-400 text-[10px] uppercase border-b border-brand-border"><tr><th class="py-1.5 text-left">Bono</th><th class="text-left">Pesos / Dólares</th><th class="text-right">TC</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-buy-body" class="divide-y divide-brand-border/60"></tbody></table>
+                </div>
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
+                    <h3 class="text-xs font-bold text-cyan-400 uppercase mb-2">Más caro para VENDER dólares</h3>
+                    <table class="w-full text-xs font-mono"><thead class="text-slate-400 text-[10px] uppercase border-b border-brand-border"><tr><th class="py-1.5 text-left">Bono</th><th class="text-left">Pesos / Dólares</th><th class="text-right">TC</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-sell-body" class="divide-y divide-brand-border/60"></tbody></table>
+                </div>
+            </div>
+        </section>
+
         <section id="tab-swap" class="hidden max-w-4xl mx-auto space-y-5">
             <div class="bg-brand-card border border-brand-border rounded-2xl p-6 shadow-2xl">
                 <div class="flex items-center gap-3 mb-6 border-b border-brand-border pb-4">
@@ -315,7 +421,7 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-[11px] text-slate-400 font-semibold block mb-1" title="Costo total por operación: comisión + derechos de mercado + impuestos">Costo por operación (%):</label>
-                                    <input type="number" id="swap-commission" value="0.11" min="0" max="3" step="0.01" oninput="triggerLiveSwap()"
+                                    <input type="number" id="swap-commission" value="0.11" min="0" max="3" step="0.01" oninput="this.dataset.touched = 1; triggerLiveSwap()"
                                            class="w-full bg-brand-elevated border border-brand-border text-xs rounded-lg p-2.5 text-white font-mono focus:border-emerald-500 focus:outline-none">
                                 </div>
                                 <div>
@@ -428,6 +534,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderIcons();
             fetchStatus();
+            fetchSettings();
             fetchMacro();
             fetchQuotes();
             fetchArbitrage();
@@ -437,7 +544,9 @@
             setInterval(() => {
                 fetchQuotes(false);
                 fetchArbitrage(false);
-            }, 15000);
+                if (!document.getElementById('tab-ci').classList.contains('hidden')) fetchCiScanner();
+                if (!document.getElementById('tab-fx').classList.contains('hidden')) fetchFx();
+            }, 30000);
         });
 
         // ==================== TABS ====================
@@ -461,12 +570,109 @@
                 }, 50);
             } else if (tabId === 'tab-swap') {
                 triggerLiveSwap();
+            } else if (tabId === 'tab-ci') {
+                fetchCiScanner();
+            } else if (tabId === 'tab-fx') {
+                fetchFx();
             }
 
             renderIcons();
         }
 
         // ==================== DATA FETCHING ====================
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+        }
+
+        async function fetchSettings() {
+            try {
+                const p = await (await fetch('/api/v1/settings/trading')).json();
+                document.getElementById('set-commission').value = p.commission_pct;
+                document.getElementById('set-min-net').value = p.min_net_profit_pct;
+                document.getElementById('set-size').value = p.trade_size_usd;
+                const sc = document.getElementById('swap-commission');
+                if (sc && !sc.dataset.touched) sc.value = p.commission_pct;
+            } catch (err) { console.error('Error fetching settings:', err); }
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            const msg = document.getElementById('settings-msg');
+            const body = {
+                commission_pct: parseFloat(document.getElementById('set-commission').value),
+                min_net_profit_pct: parseFloat(document.getElementById('set-min-net').value),
+                trade_size_usd: parseFloat(document.getElementById('set-size').value),
+            };
+            const res = await fetch('/api/v1/settings/trading', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+            if (!res.ok) { msg.textContent = (await res.json()).detail || 'Error'; msg.className = 'text-rose-400'; return; }
+            msg.textContent = 'Guardado'; msg.className = 'text-emerald-400';
+            await fetch('/api/v1/arbitrage/evaluate', {method: 'POST'});
+            await fetchArbitrage(); fetchCiScanner();
+            setTimeout(() => { msg.textContent = ''; }, 2500);
+        }
+
+        async function fetchCiScanner() {
+            try {
+                const only = document.getElementById('ci-only-signals').checked;
+                const hideThin = document.getElementById('ci-hide-thin').checked;
+                const data = await (await fetch(`/api/v1/arbitrage/ci-24hs?only_signals=${only}&limit=400`)).json();
+                const signals = data.opportunities.filter(o => o.signal).length;
+                const badge = document.getElementById('ci-badge');
+                badge.textContent = signals;
+                badge.className = `px-2 py-0.5 rounded-full text-white text-[10px] font-bold font-mono ${signals ? 'bg-rose-500' : 'bg-slate-700'}`;
+                document.getElementById('ci-subtitle').textContent =
+                    `CI liquida ${data.today} · 24hs liquida ${data.settlement_24hs} (${data.days} día/s) · caución ${data.caucion_tna_pct ?? '-'}% TNA · tamaño USD ${data.params.trade_size_usd} · mínimo neto ${data.params.min_net_profit_pct}%`;
+                const rows = data.opportunities.filter(o => !hideThin || o.depth_ok).slice(0, 150);
+                const pct = v => (v === null || v === undefined) ? '-' : `${v.toFixed(3)}%`;
+                const dir = d => d === 'VENDER_CI_COMPRAR_24HS' ? 'Vender CI → comprar 24hs' : 'Comprar CI → vender 24hs';
+                document.getElementById('ci-table-body').innerHTML = rows.map(o => `
+                    <tr class="${o.signal ? 'bg-emerald-950/30' : ''}">
+                        <td class="px-3 py-1.5 text-white font-bold">${esc(o.symbol)} <span class="text-slate-500 font-normal">${esc(o.currency)}</span></td>
+                        <td class="px-3 font-sans">${dir(o.direction)}</td>
+                        <td class="px-3 text-right text-rose-300">${o.sell_leg.price ?? '-'} <span class="text-slate-500">${esc(o.sell_leg.settlement)}</span></td>
+                        <td class="px-3 text-right text-emerald-300">${o.buy_leg.price ?? '-'} <span class="text-slate-500">${esc(o.buy_leg.settlement)}</span></td>
+                        <td class="px-3 text-right">${o.nominal ? Math.round(o.nominal).toLocaleString('es-AR') : '-'}</td>
+                        <td class="px-3 text-right">${pct(o.gross_pct)}</td>
+                        <td class="px-3 text-right text-slate-400">-${o.fees_pct.toFixed(2)}%</td>
+                        <td class="px-3 text-right text-slate-400">${o.direction === 'COMPRAR_CI_VENDER_24HS' ? '-' + o.carry_pct.toFixed(3) + '%' : '-'}</td>
+                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${o.coupon_status === 'AJUSTADO' ? o.flow_adjustment.toFixed(4) : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : '-')}</td>
+                        <td class="px-3 text-right font-bold ${o.net_pct >= data.params.min_net_profit_pct ? 'text-emerald-400' : (o.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">${pct(o.net_pct)}</td>
+                        <td class="px-3 text-[10px] text-slate-400 font-sans whitespace-normal min-w-[260px]">${esc(o.notes.join(' '))}</td>
+                    </tr>`).join('') || '<tr><td colspan="11" class="py-8 text-center text-slate-500 font-sans">Sin datos de puntas para CI y 24hs.</td></tr>';
+            } catch (err) { console.error('Error CI scanner:', err); }
+        }
+
+        let fxKind = 'MEP';
+        function setFxKind(k) {
+            fxKind = k;
+            ['MEP', 'CCL'].forEach(x => {
+                document.getElementById(`fx-btn-${x}`).className = x === k
+                    ? 'px-3 py-1.5 rounded-lg font-bold bg-emerald-500 text-slate-950'
+                    : 'px-3 py-1.5 rounded-lg font-semibold bg-brand-elevated text-slate-300';
+            });
+            fetchFx();
+        }
+
+        async function fetchFx() {
+            try {
+                const data = await (await fetch(`/api/v1/arbitrage/fx-implied?kind=${fxKind}`)).json();
+                const money = v => v ? `$${v.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
+                const row = (q, rate) => `<tr><td class="py-1.5 text-white">${esc(q.base)}</td>
+                    <td class="text-slate-400">${esc(q.ars_symbol)} ${esc(q.ars_settlement)} / ${esc(q.usd_symbol)} ${esc(q.usd_settlement)}</td>
+                    <td class="text-right font-bold">${money(rate)}</td>
+                    <td class="text-right ${(rate === q.buy_usd_rate ? q.buy_depth_ok : q.sell_depth_ok) ? 'text-emerald-400' : 'text-slate-500'}">${(rate === q.buy_usd_rate ? q.buy_depth_ok : q.sell_depth_ok) ? 'OK' : 'baja'}</td></tr>`;
+                document.getElementById('fx-buy-body').innerHTML = data.best_to_buy_usd.slice(0, 15).map(q => row(q, q.buy_usd_rate)).join('');
+                document.getElementById('fx-sell-body').innerHTML = data.best_to_sell_usd.slice(0, 15).map(q => row(q, q.sell_usd_rate)).join('');
+                document.getElementById('fx-roundtrips').innerHTML = data.round_trips.map(t => `
+                    <div class="p-4 rounded-xl border ${t.signal ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-brand-border bg-brand-card'} text-xs space-y-1">
+                        <div class="font-bold text-white">Ida y vuelta ${esc(t.kind)} · ${esc(t.settlement)}</div>
+                        <div class="font-mono">Comprar con <b>${esc(t.buy_with)}</b> a ${money(t.buy_usd_rate)} → vender con <b>${esc(t.sell_with)}</b> a ${money(t.sell_usd_rate)}</div>
+                        <div class="font-mono font-bold ${t.signal ? 'text-emerald-400' : (t.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">Neto ${t.net_pct.toFixed(3)}% (mínimo ${data.params.min_net_profit_pct}%)</div>
+                        <div class="text-[10px] text-slate-500">${esc(t.notes.join(' '))}</div>
+                    </div>`).join('') || '<div class="text-xs text-slate-500">Sin datos suficientes para ida y vuelta.</div>';
+            } catch (err) { console.error('Error FX:', err); }
+        }
+
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/v1/status');
@@ -561,36 +767,51 @@
                 if (!data.active_signals || data.active_signals.length === 0) {
                     sigBox.innerHTML = `
                         <div class="col-span-full py-8 text-center text-slate-500 text-xs font-sans">
-                            No se detectan desarbitrajes extremos en este momento. Los precios cotizan dentro de las bandas históricas esperadas.
+                            No hay oportunidades que superen la ganancia neta mínima con profundidad suficiente para el tamaño configurado.
                         </div>
                     `;
                 } else {
-                    sigBox.innerHTML = data.active_signals.map(s => `
+                    sigBox.innerHTML = data.active_signals.map(s => {
+                        const isLeg = !s.leg_sell_ticker.includes(' ');   // swaps entre bonos: simulables
+                        const conf = s.confirmation === 'TIEMPO_REAL'
+                            ? '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Confirmada en tiempo real</span>'
+                            : '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="BYMA Open Data publica con 20 minutos de demora">Detectada · demora 20 min</span>';
+                        const since = s.first_seen ? new Date(s.first_seen).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'}) : '-';
+                        const net = (s.net_profit_pct !== null && s.net_profit_pct !== undefined)
+                            ? `<span class="text-emerald-400 font-bold">Neto ${s.net_profit_pct.toFixed(2)}%</span>` : '';
+                        return `
                         <div class="p-4 rounded-xl bg-brand-dark border border-emerald-500/50 shadow-lg relative overflow-hidden flex flex-col justify-between space-y-3">
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between gap-2">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                                    ${s.strategy_name.replace(/_/g, ' ')}
+                                    ${esc(s.strategy_name.replace(/_/g, ' '))}
                                 </span>
-                                <span class="flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                    ${s.action_recommended.replace(/_/g, ' ')}
-                                </span>
+                                <span class="text-[11px] font-bold text-emerald-400 text-right">${esc(s.action_recommended.replace(/_/g, ' '))}</span>
                             </div>
-
                             <div class="flex items-center justify-between text-sm font-mono font-bold text-white bg-brand-elevated/70 p-2.5 rounded-lg border border-brand-border">
-                                <span class="text-rose-400">Vender ${s.leg_sell_ticker}</span>
+                                <span class="text-rose-400">Vender ${esc(s.leg_sell_ticker)}</span>
                                 <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
-                                <span class="text-emerald-400">Comprar ${s.leg_buy_ticker}</span>
+                                <span class="text-emerald-400">Comprar ${esc(s.leg_buy_ticker)}</span>
                             </div>
+                            <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-slate-400">
+                                ${conf} <span>activa desde ${since}</span> ${net}
+                            </div>
+                            <p class="text-[11px] text-slate-300 leading-relaxed">${esc(s.notes || '')}</p>
+                            ${isLeg ? `<button onclick="setupSwapFromSignal('${esc(s.leg_sell_ticker)}', '${esc(s.leg_buy_ticker)}')" class="w-full py-2 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-1.5 shadow-md">
+                                <i data-lucide="calculator" class="w-3.5 h-3.5"></i><span>Ejecutar en Simulador</span></button>` : ''}
+                        </div>`;
+                    }).join('');
+                }
 
-                            <p class="text-[11px] text-slate-300 leading-relaxed">${s.notes}</p>
-
-                            <button onclick="setupSwapFromSignal('${s.leg_sell_ticker}', '${s.leg_buy_ticker}')" class="w-full py-2 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-1.5 shadow-md">
-                                <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
-                                <span>Ejecutar en Simulador</span>
-                            </button>
-                        </div>
-                    `).join('');
+                // Ratios de curva
+                const crBody = document.getElementById('curve-ratios-body');
+                if (crBody && data.curve_ratios) {
+                    const f = (v, d = 4) => (v === null || v === undefined) ? '-' : v.toFixed(d);
+                    crBody.innerHTML = data.curve_ratios.map(r => `
+                        <tr><td class="px-3 py-1.5 text-white">${esc(r.a)} / ${esc(r.b)}</td><td class="px-3 text-center text-slate-400">${esc(r.settlement)}</td>
+                        <td class="px-3 text-right">${f(r.mid_ratio)}</td><td class="px-3 text-right">${f(r.rotate_a_to_b)}</td>
+                        <td class="px-3 text-right">${f(r.rotate_b_to_a)}</td><td class="px-3 text-right">${r.z_score === null ? '-' : r.z_score.toFixed(2)}</td>
+                        <td class="px-3 text-slate-500 font-sans">${esc(r.calibration)}</td></tr>`).join('')
+                        || '<tr><td colspan="7" class="py-4 text-center text-slate-500">Sin puntas para estos pares.</td></tr>';
                 }
 
                 // 3. Render Law Matrix
@@ -619,7 +840,11 @@
                                     <span>${m.al_ticker}: U$D ${m.price_al ? m.price_al.toFixed(2) : '-'}</span>
                                     <span>${m.gd_ticker}: U$D ${m.price_gd ? m.price_gd.toFixed(2) : '-'}</span>
                                 </div>
-                                <p class="text-[11px] text-slate-300 border-t border-brand-border/60 pt-1.5">${m.status_description}</p>
+                                <div class="text-[10px] text-slate-500 font-mono flex justify-between">
+                                    <span>Z: ${m.z_score === null || m.z_score === undefined ? '-' : m.z_score.toFixed(2)}</span>
+                                    <span>${esc(m.calibration || '')}</span>
+                                </div>
+                                <p class="text-[11px] text-slate-300 border-t border-brand-border/60 pt-1.5">${esc(m.status_description)}</p>
                             </div>
                         `;
                     }).join('');

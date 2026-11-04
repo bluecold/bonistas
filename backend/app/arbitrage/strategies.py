@@ -112,7 +112,9 @@ class ArbitrageStrategies:
 
     @staticmethod
     def evaluate_relative_value_curve(
-        quotes_by_ticker: Dict[str, BondQuoteView]
+        quotes_by_ticker: Dict[str, BondQuoteView],
+        spread_mean_bps: Optional[float] = None,
+        spread_std_bps: Optional[float] = None,
     ) -> List[ArbitrageSignalCreate]:
         """
         Estrategia 2: Relative Value & Duration Swap (Tramo Corto GD29 vs AL30).
@@ -134,10 +136,11 @@ class ArbitrageStrategies:
 
         if ytm_al30 is not None and ytm_gd29 is not None:
             spread_bps = round((ytm_al30 - ytm_gd29) * 100.0, 1) # diferencia en puntos básicos
-            z_score = round(
-                (spread_bps - HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS) / HISTORICAL_AL30_GD29_SPREAD_STD_BPS,
-                2
-            )
+            # Media/desvío de la historia real si se proveen; si no, calibración estática
+            mean_bps = spread_mean_bps if spread_mean_bps is not None else HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS
+            std_bps = spread_std_bps if spread_std_bps else HISTORICAL_AL30_GD29_SPREAD_STD_BPS
+            calibration = "historia real" if spread_mean_bps is not None else "calibración estática"
+            z_score = round((spread_bps - mean_bps) / std_bps, 2)
 
             # Activación solo ante un ensanchamiento anormal respecto de la media histórica
             if z_score >= RV_Z_THRESHOLD:
@@ -148,12 +151,12 @@ class ArbitrageStrategies:
                         leg_buy_ticker="AL30",
                         metric_name="SPREAD_YIELD_BPS",
                         metric_value=Decimal(str(spread_bps)),
-                        historical_mean=Decimal(str(HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS)),
+                        historical_mean=Decimal(str(round(mean_bps, 2))),
                         std_deviations=Decimal(str(z_score)),
                         action_recommended="SWAP_DURACION",
                         notes=(
                             f"Diferencial AL30 vs GD29 en {spread_bps:.1f} bps (Z-Score: {z_score:+.2f} sigma "
-                            f"sobre una media de {HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS:.0f} bps). "
+                            f"sobre una media de {mean_bps:.0f} bps, {calibration}). "
                             f"MD AL30 {q_al30.modified_duration or '-'} vs GD29 {q_gd29.modified_duration or '-'}. "
                             f"Recomendación: Rotar GD29 hacia AL30 para maximizar captura en compresión de curvas."
                         )
@@ -161,6 +164,28 @@ class ArbitrageStrategies:
                 )
 
         return signals
+
+    @staticmethod
+    def _match_fixed_cer_pair(quotes_by_ticker: Dict[str, BondQuoteView]):
+        """
+        Elige el par tasa fija / CER con la Modified Duration más parecida (y > ~2 meses), para
+        que el breakeven compare plazos equivalentes. Antes se tomaba el primero de una lista
+        fija (ej. S30N6 a 26 días contra TZX27 a 8 meses).
+        Sin datos de duration, cae al primero disponible de cada tipo.
+        """
+        MIN_MD = 0.15
+        fixed = [q for q in quotes_by_ticker.values() if q.bond_type == "TASA_FIJA" and q.ytm_percentage]
+        cer = [q for q in quotes_by_ticker.values() if q.bond_type == "CER" and q.ytm_percentage]
+        with_md = [
+            (abs(f.modified_duration - c.modified_duration), f, c)
+            for f in fixed for c in cer
+            if f.modified_duration and c.modified_duration
+            and f.modified_duration >= MIN_MD and c.modified_duration >= MIN_MD
+        ]
+        if with_md:
+            _, f, c = min(with_md, key=lambda t: t[0])
+            return f, c
+        return (fixed[0] if fixed else None), (cer[0] if cer else None)
 
     @staticmethod
     def evaluate_breakeven_inflation(
@@ -173,21 +198,7 @@ class ArbitrageStrategies:
         """
         signals: List[ArbitrageSignalCreate] = []
 
-        # Buscar mejor referencia de tasa fija (S30N6, T30A7, T15E7)
-        fixed_candidates = ["S30N6", "T30A7", "T15E7", "TY30P"]
-        fixed_quote: Optional[BondQuoteView] = None
-        for t in fixed_candidates:
-            if t in quotes_by_ticker and quotes_by_ticker[t].ytm_percentage:
-                fixed_quote = quotes_by_ticker[t]
-                break
-
-        # Buscar mejor referencia de BONCER (TZX27, TZX28, TX26)
-        cer_candidates = ["TZX27", "TZX28", "TX26", "TX31"]
-        cer_quote: Optional[BondQuoteView] = None
-        for t in cer_candidates:
-            if t in quotes_by_ticker and quotes_by_ticker[t].ytm_percentage:
-                cer_quote = quotes_by_ticker[t]
-                break
+        fixed_quote, cer_quote = ArbitrageStrategies._match_fixed_cer_pair(quotes_by_ticker)
 
         if not fixed_quote or not cer_quote:
             return signals
@@ -215,7 +226,9 @@ class ArbitrageStrategies:
                     action_recommended="COMPRAR_CER",
                     notes=(
                         f"Inflación proyectada ({expected_monthly_inflation_pct:.2f}% m/m) superior al breakeven "
-                        f"de mercado ({be_monthly_pct:.2f}% m/m) entre {fixed_quote.ticker} y {cer_quote.ticker}. "
+                        f"de mercado ({be_monthly_pct:.2f}% m/m) entre {fixed_quote.ticker} (MD {fixed_quote.modified_duration or '-'}) "
+                        f"y {cer_quote.ticker} (MD {cer_quote.modified_duration or '-'}). "
+                        f"Nota: la inflación de referencia es el último IPC publicado (no una expectativa). "
                         f"Recomendación: Posicionarse en BONCER para capturar ajuste CER + cupón real."
                     )
                 )

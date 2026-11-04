@@ -255,3 +255,24 @@ El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `
 * **Bug corregido**: Bonistas publica variantes `_PUT` / `_TAM` (mismo instrumento, TIR bajo otro escenario); se fusionaban con el bono base y la TIR alternaba entre escenarios en cada ciclo (ej. BPOA8 9,3% ↔ 27,4%). Ahora se usa solo el escenario base.
 * Dashboard: indicador real de estado de mercado y salud de fuentes (antes decía "Rueda en Vivo" siempre); el encabezado muestra el mayorista A3500 (antes mostraba el oficial minorista con la etiqueta "mayorista").
 * Verificado con datos reales: TIR de S30N6 25,97%, T30A7 29,31%, TZX27 3,69% real, BPA7D 2,22% (iguales a las de referencia de mercado).
+
+### Etapa 3 — Detectores sobre puntas (2026-11-04)
+
+Parámetros (editables en el Command Center, tabla `user_settings`): costo por operación **0,11%**, ganancia neta mínima **0,40%**, tamaño **USD 500** (en especies en pesos se convierte con el MEP implícito del AL30).
+
+| Detector | Módulo | Regla |
+|---|---|---|
+| **CI vs 24hs** (misma especie) | `arbitrage/ci_24hs.py` | A) vender CI a la compradora / comprar 24hs a la vendedora: `bruto = (bid_CI − F)/ask_24 − 1`. B) comprar CI / vender 24hs: `bruto = (bid_24 + F)/ask_CI − 1`, menos caución por los días entre liquidaciones. Neto = bruto − 2 × costo. |
+| **Dólar implícito** | `arbitrage/fx_implied.py` | MEP/CCL ejecutable por bono (comprar y vender dólares, costos incluidos), todas las combinaciones de plazo; ida y vuelta entre bonos en el mismo plazo. |
+| **Ratios** | `arbitrage/ratios.py` | AL/GD y pares de curva del monitor del trader (AE38/GD35, AE38/GD41, GD38/GD41, GD35/GD38), especie D, con puntas; z-score con serie diaria real. |
+
+Reglas de seguridad (para evitar falsas alarmas):
+* **Corte de cupón**: `F` = flujos con `hoy < fecha ≤ liquidación 24hs` (cronograma propio AL/GD o flujos de CompararBonos; para especies en pesos de bonos USD se convierte con el TC implícito). Sin cronograma conocido (`DESCONOCIDO`) **no se emite señal**.
+* **Profundidad**: si la punta no cubre el tamaño configurado, no hay señal (se muestra igual en la tabla).
+* **Z-scores**: las reglas puramente estadísticas (valor relativo AL30/GD29, rotar a ARG por z ≥ 1,5, semáforo amarillo) solo actúan con **≥ 20 ruedas de historia real**. Con calibración estática el z se muestra como dato informativo. Las reglas absolutas (ratio AL/GD ≤ 1,01 o ≥ 1,12) siguen activas.
+* **Duales**: sin señal (paridad < 96% no es evidencia de subvaluación).
+* **Breakeven**: par tasa fija / CER con la duration más parecida (antes, el primero de una lista fija).
+
+Señales persistentes: clave `estrategia|venta|compra|acción`; mientras siga vigente es la misma fila (`first_seen`, `last_seen`, `net_profit_pct`, `confirmation` = `DEMORA_20MIN` con BYMA). Las señales v1.0 sin clave se expiran al primer ciclo. `db/migrations.py` agrega columnas nuevas a bases existentes sin tocar datos.
+
+Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `GET /arbitrage/ratios`, `GET|PUT /settings/trading`. Dashboard: pestañas "CI vs 24hs" y "Dólar implícito", panel de parámetros, ratios de curva y tarjetas con ganancia neta / origen del dato / "activa desde".

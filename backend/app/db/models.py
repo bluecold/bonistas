@@ -90,6 +90,13 @@ class ArbitrageSignal(Base):
     action_recommended = Column(String(40), nullable=False) # 'ROTAR_A_NY', 'ROTAR_A_ARG', 'SWAP_DURACION', 'COMPRAR_CER', 'COMPRAR_TASA_FIJA'
     status = Column(String(20), default="ACTIVE", index=True) # 'ACTIVE', 'EXECUTED', 'EXPIRED'
     notes = Column(Text, nullable=True)
+    # Persistencia de señales (etapa 3): una señal es la misma mientras siga vigente
+    signal_key = Column(String(120), nullable=True, index=True)   # estrategia|venta|compra|acción
+    first_seen = Column(DateTime(timezone=True), nullable=True)
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    net_profit_pct = Column(Float, nullable=True)                 # ganancia neta estimada (%)
+    confirmation = Column(String(30), nullable=True)              # 'DEMORA_20MIN' | 'TIEMPO_REAL'
+    details = Column(JSON, nullable=True)
 
     def __repr__(self):
         return f"<ArbitrageSignal {self.strategy_name}: Sell {self.leg_sell_ticker} -> Buy {self.leg_buy_ticker} ({self.action_recommended})>"
@@ -175,3 +182,13 @@ class ReferenceBond(Base):
 
     def __repr__(self):
         return f"<ReferenceBond {self.ticker_base} ({self.tipo}) {len(self.flows or [])} flujos>"
+
+
+class UserSetting(Base):
+    """Parámetros editables desde el dashboard (clave -> valor JSON)."""
+    __tablename__ = "user_settings"
+
+    key = Column(String(60), primary_key=True)
+    value = Column(JSON, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))

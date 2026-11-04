@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 
 from backend.app.config import settings
 from backend.app.db.session import engine, Base, SessionLocal
+from backend.app.db.migrations import add_missing_columns
 from backend.app.db.models import Bond, PriceSnapshot, ArbitrageSignal, MacroIndicator, ReferenceBond
 from backend.app.services.market_calendar import ART
 # Se reutilizan las mismas instancias que usan los endpoints (una sola fuente de verdad)
@@ -85,6 +86,7 @@ async def lifespan(app: FastAPI):
     # 1. Crear tablas en la base de datos (las nuevas se agregan sin tocar las existentes)
     logger.info("Verificando y creando esquemas de base de datos...")
     Base.metadata.create_all(bind=engine)
+    add_missing_columns(engine)
 
     # 2. Sembrar catálogo inicial
     db = SessionLocal()

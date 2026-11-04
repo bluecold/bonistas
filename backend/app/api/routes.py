@@ -43,6 +43,7 @@ from backend.app.services.market_book_service import MarketBookService
 from backend.app.services.reference_data_service import ReferenceDataService
 from backend.app.services.market_calendar import MarketCalendar, next_business_day
 from backend.app.services.source_health import source_health
+from backend.app.services.trading_settings import get_params, update_params
 from backend.app.config import settings
 
 router = APIRouter()
@@ -556,6 +557,8 @@ def trigger_arbitrage_evaluation(db: Session = Depends(get_db)):
     return {
         "status": "success",
         "signals_generated_count": len(signals),
+        "new_signals_count": len(arbitrage_engine.last_new_signals),
+        "expired_signals_count": arbitrage_engine.last_expired_count,
         "signals": [
             {
                 "id": s.id,
@@ -569,6 +572,69 @@ def trigger_arbitrage_evaluation(db: Session = Depends(get_db)):
             for s in signals
         ]
     }
+
+@router.get("/arbitrage/ci-24hs", tags=["Arbitrage Engine"])
+def get_ci_24hs_scanner(
+    only_signals: bool = Query(False, description="Solo oportunidades que superan la ganancia mínima"),
+    limit: int = Query(100, ge=1, le=2000),
+    db: Session = Depends(get_db),
+):
+    """
+    Arbitraje entre plazos CI vs 24hs (misma especie), en las dos direcciones, con puntas,
+    costos, caución y ajuste por corte de cupón. Ordenado por ganancia neta.
+    """
+    scan = arbitrage_engine.scan(db)
+    rows = [o for o in scan.ci_24hs if o.signal] if only_signals else scan.ci_24hs
+    return {
+        "params": scan.params.to_dict(),
+        "today": scan.view.today, "settlement_24hs": scan.view.next_bd,
+        "days": scan.view.settlement_days, "caucion_tna_pct": scan.view.caucion_tna_pct,
+        "mep_reference": scan.view.mep_reference,
+        "opportunities": [o.to_dict() for o in rows[:limit]],
+    }
+
+
+@router.get("/arbitrage/fx-implied", tags=["Arbitrage Engine"])
+def get_fx_implied(
+    kind: str = Query("MEP", pattern="^(?i:MEP|CCL)$"),
+    db: Session = Depends(get_db),
+):
+    """Dólar MEP / CCL ejecutable por bono y plazo (comprar y vender dólares), y mejor ida y vuelta."""
+    scan = arbitrage_engine.scan(db)
+    k = kind.upper()
+    quotes = [q for q in scan.fx_quotes if q.kind == k]
+    buys = sorted([q for q in quotes if q.buy_usd_rate], key=lambda q: q.buy_usd_rate)
+    sells = sorted([q for q in quotes if q.sell_usd_rate], key=lambda q: q.sell_usd_rate, reverse=True)
+    return {
+        "params": scan.params.to_dict(),
+        "kind": k,
+        "best_to_buy_usd": [q.to_dict() for q in buys[:30]],
+        "best_to_sell_usd": [q.to_dict() for q in sells[:30]],
+        "round_trips": [t.to_dict() for t in scan.fx_round_trips if t.kind == k],
+    }
+
+
+@router.get("/arbitrage/ratios", tags=["Arbitrage Engine"])
+def get_pair_ratios(db: Session = Depends(get_db)):
+    """Ratios AL/GD y entre bonos de la curva, con puntas y z-score (historia real cuando alcanza)."""
+    scan = arbitrage_engine.scan(db)
+    return {"params": scan.params.to_dict(), "ratios": [r.to_dict() for r in scan.ratios]}
+
+
+@router.get("/settings/trading", tags=["Settings"])
+def get_trading_settings(db: Session = Depends(get_db)):
+    """Parámetros operativos: costo por operación (%), ganancia neta mínima (%) y tamaño (USD)."""
+    return get_params(db).to_dict()
+
+
+@router.put("/settings/trading", tags=["Settings"])
+def put_trading_settings(values: Dict[str, float], db: Session = Depends(get_db)):
+    """Actualiza uno o más parámetros operativos (se guardan en la base)."""
+    try:
+        return update_params(db, values).to_dict()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
 
 @router.get("/arbitrage/command-center", tags=["Arbitrage Engine"])
 def get_arbitrage_command_center(db: Session = Depends(get_db)):
