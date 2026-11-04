@@ -21,6 +21,7 @@ HISTORICAL_LAW_RATIO_STD = 0.032    # Desvío estándar de la prima de legislaci
 
 HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS = 180.0  # Spread medio AL30 vs GD29
 HISTORICAL_AL30_GD29_SPREAD_STD_BPS = 45.0   # Desvío estándar
+RV_Z_THRESHOLD = 1.1                          # Desvíos sobre la media para activar el swap
 
 class ArbitrageStrategies:
 
@@ -49,8 +50,9 @@ class ArbitrageStrategies:
             if not q_al or not q_gd:
                 continue
 
-            p_al = q_al.price_mep or q_al.last_price
-            p_gd = q_gd.price_mep or q_gd.last_price
+            # Solo especie D (MEP) contra especie D. Nunca caer a last_price: puede estar en pesos.
+            p_al = q_al.price_mep
+            p_gd = q_gd.price_mep
 
             if not p_al or not p_gd or p_al <= 0 or p_gd <= 0:
                 continue
@@ -100,7 +102,7 @@ class ArbitrageStrategies:
                         std_deviations=Decimal(str(z_score)),
                         action_recommended="ROTAR_A_ARG",
                         notes=(
-                            f"Ensanchamiento anormal de brecha legal {gd}/{al}: Ratio {ratio:.4f} (+{z_score} sigma). "
+                            f"Ensanchamiento anormal de brecha legal {gd}/{al}: Ratio {ratio:.4f} ({z_score:+.2f} sigma). "
                             f"Venta de GD y compra de AL anticipando compresión de spread hacia el promedio histórico."
                         )
                     )
@@ -115,7 +117,9 @@ class ArbitrageStrategies:
         """
         Estrategia 2: Relative Value & Duration Swap (Tramo Corto GD29 vs AL30).
         - Métrica: Delta TIR = TIR(AL30) - TIR(GD29).
-        - Regla: Spread > 130 bps o Z > +1.1 sigma -> SELL GD29 & BUY AL30.
+        - Regla: Z >= +1.1 sigma sobre la media histórica del spread -> SELL GD29 & BUY AL30.
+          (Antes también disparaba con spread >= 130 bps, umbral por DEBAJO de la media de 180 bps:
+          la señal quedaba activa en condiciones normales de mercado.)
         Aprovecha la superior convexidad y TIR de AL30 con Modified Duration casi idéntica.
         """
         signals: List[ArbitrageSignalCreate] = []
@@ -135,8 +139,8 @@ class ArbitrageStrategies:
                 2
             )
 
-            # Activación ante spread superior a 130 bps o z > 1.1 sigma
-            if spread_bps >= 130.0 or z_score >= 1.1:
+            # Activación solo ante un ensanchamiento anormal respecto de la media histórica
+            if z_score >= RV_Z_THRESHOLD:
                 signals.append(
                     ArbitrageSignalCreate(
                         strategy_name="RELATIVE_VALUE_CURVE",
@@ -148,8 +152,9 @@ class ArbitrageStrategies:
                         std_deviations=Decimal(str(z_score)),
                         action_recommended="SWAP_DURACION",
                         notes=(
-                            f"Diferencial AL30 vs GD29 en {spread_bps:.1f} bps (Z-Score: +{z_score} sigma). "
-                            f"AL30 ofrece mayor convexidad y TIR con Modified Duration equivalente (~1.66 vs 1.29). "
+                            f"Diferencial AL30 vs GD29 en {spread_bps:.1f} bps (Z-Score: {z_score:+.2f} sigma "
+                            f"sobre una media de {HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS:.0f} bps). "
+                            f"MD AL30 {q_al30.modified_duration or '-'} vs GD29 {q_gd29.modified_duration or '-'}. "
                             f"Recomendación: Rotar GD29 hacia AL30 para maximizar captura en compresión de curvas."
                         )
                     )

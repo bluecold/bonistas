@@ -1,67 +1,59 @@
 """
-Conector macroeconómico: Obtiene inflación mensual IPC, coeficiente CER, tasa TAMAR y tipo de cambio oficial.
+Conector macroeconómico: inflación mensual (IPC).
+
+Solo devuelve datos REALES con su fecha y fuente. Si la consulta falla no se inventa un valor:
+las estrategias usan sus propios valores por defecto y lo registran, pero nada ficticio se
+persiste en la base como si fuera un dato de mercado.
+
+Pendiente (etapa 2): CER, TAMAR y A3500 desde la API del BCRA.
 """
 
 import httpx
 import logging
-from datetime import date, datetime
+from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Any, Optional, List
+from typing import Dict, Optional
 from backend.app.schemas.macro import MacroIndicatorCreate
 
 logger = logging.getLogger(__name__)
 
+INFLATION_URL = "https://api.argentinadatos.com/v1/finanzas/indices/inflacion"
+
+
 class MacroDataConnector:
     def __init__(self, timeout: float = 8.0):
         self.timeout = timeout
-        self.headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+        self.headers = {"User-Agent": "bonistas-monitor/1.1", "Accept": "application/json"}
 
     async def fetch_latest_inflation(self) -> Optional[MacroIndicatorCreate]:
-        """Obtiene el último registro de inflación mensual IPC."""
-        url = "https://api.argentinadatos.com/v1/finanzas/indices/inflacion"
+        """Último dato de inflación mensual IPC (INDEC vía ArgentinaDatos), o None si no hay datos."""
         try:
             async with httpx.AsyncClient(timeout=self.timeout, headers=self.headers) as client:
-                res = await client.get(url)
-                if res.status_code == 200:
-                    data = res.json()
-                    if data and isinstance(data, list):
-                        last_item = data[-1]
-                        fecha_str = last_item.get("fecha")
-                        valor = last_item.get("valor")
-                        if fecha_str and valor is not None:
-                            d = datetime.strptime(fecha_str, "%Y-%m-%d").date()
-                            return MacroIndicatorCreate(
-                                date=d,
-                                name="IPC",
-                                value=Decimal(str(valor)),
-                                source="INDEC / ArgentinaDatos"
-                            )
+                res = await client.get(INFLATION_URL)
+                res.raise_for_status()
+                data = res.json()
         except Exception as e:
-            logger.warning(f"No se pudo consultar la API de inflación: {e}. Usando valor estimado.")
-            
-        # Fallback a fecha reciente con valor estimado si no hay conexión
+            logger.warning(f"No se pudo consultar la API de inflación: {e}")
+            return None
+
+        if not data or not isinstance(data, list):
+            return None
+        last_item = data[-1]
+        fecha_str = last_item.get("fecha")
+        valor = last_item.get("valor")
+        if not fecha_str or valor is None:
+            return None
         return MacroIndicatorCreate(
-            date=date.today().replace(day=1),
+            date=datetime.strptime(fecha_str, "%Y-%m-%d").date(),
             name="IPC",
-            value=Decimal("2.4"),
-            source="ESTIMADO_FALLBACK"
+            value=Decimal(str(valor)),
+            source="INDEC / ArgentinaDatos",
         )
 
-    async def fetch_macro_snapshot(self) -> Dict[str, Decimal]:
-        """
-        Retorna un diccionario consolidado con las variables macro clave:
-        - IPC: Inflación mensual (%)
-        - CER: Valor aproximado de coeficiente CER diario
-        - TAMAR: Tasa mayorista de referencia anualizada (%)
-        - A3500: Tipo de cambio oficial mayorista BCRA
-        """
-        ipc_item = await self.fetch_latest_inflation()
-        ipc_val = ipc_item.value if ipc_item else Decimal("2.4")
-
-        return {
-            "IPC": ipc_val,
-            "CER": Decimal("672.45"),    # Coeficiente de estabilización de referencia base
-            "TAMAR": Decimal("38.50"),   # Tasa TAMAR de referencia
-            "A3500": Decimal("1545.00"), # TC Oficial Mayorista
-        }
-
+    async def fetch_macro_snapshot(self) -> Dict[str, MacroIndicatorCreate]:
+        """Indicadores macro disponibles, por nombre. Solo incluye los que se obtuvieron de verdad."""
+        result: Dict[str, MacroIndicatorCreate] = {}
+        ipc = await self.fetch_latest_inflation()
+        if ipc is not None:
+            result["IPC"] = ipc
+        return result

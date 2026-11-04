@@ -314,13 +314,13 @@
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-[11px] text-slate-400 font-semibold block mb-1">Comisión Broker (%):</label>
-                                    <input type="number" id="swap-commission" value="0.5" min="0" max="3" step="0.05" oninput="triggerLiveSwap()"
+                                    <label class="text-[11px] text-slate-400 font-semibold block mb-1" title="Costo total por operación: comisión + derechos de mercado + impuestos">Costo por operación (%):</label>
+                                    <input type="number" id="swap-commission" value="0.11" min="0" max="3" step="0.01" oninput="triggerLiveSwap()"
                                            class="w-full bg-brand-elevated border border-brand-border text-xs rounded-lg p-2.5 text-white font-mono focus:border-emerald-500 focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] text-slate-400 font-semibold block mb-1">Derecho BYMA (%):</label>
-                                    <input type="number" id="swap-byma" value="0.04" min="0" max="1" step="0.01" oninput="triggerLiveSwap()"
+                                    <label class="text-[11px] text-slate-400 font-semibold block mb-1" title="Solo si NO están incluidos en el costo por operación">Derechos adicionales (%):</label>
+                                    <input type="number" id="swap-byma" value="0" min="0" max="1" step="0.01" oninput="triggerLiveSwap()"
                                            class="w-full bg-brand-elevated border border-brand-border text-xs rounded-lg p-2.5 text-white font-mono focus:border-emerald-500 focus:outline-none">
                                 </div>
                             </div>
@@ -332,6 +332,8 @@
                         <span>Calcular Arbitraje de Swap</span>
                     </button>
                 </form>
+
+                <div id="swap-error" class="hidden mt-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs"></div>
 
                 <!-- Result Card -->
                 <div id="swap-result-box" class="mt-6 p-5 rounded-xl bg-brand-dark border border-emerald-500/30 space-y-4">
@@ -836,7 +838,7 @@
             const currentBuy = buySelect.value;
 
             // Ordenar tickers únicos
-            const uniqueTickers = [...new Set(allQuotes.map(q => q.ticker.replace(/[DC]$/, '')))].sort();
+            const uniqueTickers = [...new Set(allQuotes.map(q => q.ticker))].sort();
 
             const optionsHtml = uniqueTickers.map(t => `<option value="${t}">${t}</option>`).join('');
             sellSelect.innerHTML = optionsHtml;
@@ -859,7 +861,7 @@
 
         function prepareSwapForTicker(ticker) {
             switchTab('tab-swap', document.getElementById('tab-btn-swap'));
-            const clean = ticker.replace(/[DC]$/, '');
+            const clean = ticker;
             document.getElementById('swap-sell-ticker').value = clean;
             if (clean === 'AL30') document.getElementById('swap-buy-ticker').value = 'GD30';
             else if (clean === 'GD30') document.getElementById('swap-buy-ticker').value = 'AL30';
@@ -876,9 +878,14 @@
         async function triggerLiveSwap() {
             const sellTicker = document.getElementById('swap-sell-ticker').value;
             const buyTicker = document.getElementById('swap-buy-ticker').value;
-            const nominal = parseFloat(document.getElementById('swap-sell-nominal').value) || 10000;
-            const commission = parseFloat(document.getElementById('swap-commission').value) || 0.5;
-            const byma = parseFloat(document.getElementById('swap-byma').value) || 0.04;
+            const numOr = (id, fallback) => {
+                const v = parseFloat(document.getElementById(id).value);
+                return Number.isFinite(v) ? v : fallback;   // 0 es un valor válido
+            };
+            const nominal = numOr('swap-sell-nominal', 10000);
+            const commission = numOr('swap-commission', 0.11);
+            const byma = numOr('swap-byma', 0);
+            const errorBox = document.getElementById('swap-error');
 
             try {
                 const res = await fetch('/api/v1/calculator/swap', {
@@ -892,15 +899,24 @@
                         byma_fee_pct: byma
                     })
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    let detail = `Error ${res.status}`;
+                    try { detail = (await res.json()).detail || detail; } catch (_) {}
+                    errorBox.textContent = detail;
+                    errorBox.classList.remove('hidden');
+                    document.getElementById('swap-result-box').classList.add('hidden');
+                    return;
+                }
+                errorBox.classList.add('hidden');
                 const data = await res.json();
+                const cur = data.currency === 'ARS' ? 'AR$' : 'U$D';
 
                 document.getElementById('swap-result-box').classList.remove('hidden');
                 document.getElementById('swap-ratio-badge').innerText = `Ratio: ${data.nominal_expansion_ratio.toFixed(4)}`;
-                document.getElementById('res-sell-net').innerText = `$${data.sell_net_proceeds.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('res-sell-net').innerText = `${cur} ${data.sell_net_proceeds.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                 document.getElementById('res-buy-nominal').innerText = `${data.buy_nominal_acquired.toLocaleString('es-AR')} nom.`;
                 document.getElementById('res-yield-pickup').innerText = data.yield_pickup_bps !== null ? `${data.yield_pickup_bps > 0 ? '+' : ''}${data.yield_pickup_bps} bps` : '-';
-                document.getElementById('res-leftover').innerText = `$${data.cash_leftover.toFixed(2)}`;
+                document.getElementById('res-leftover').innerText = `${cur} ${data.cash_leftover.toFixed(2)}`;
                 document.getElementById('res-summary-message').innerText = data.summary_message;
             } catch (err) {
                 console.error("Error running swap simulation:", err);
@@ -909,7 +925,7 @@
 
         // ==================== CASHFLOW MODAL ====================
         async function openCashflowModal(ticker) {
-            activeModalTicker = ticker.replace(/[DC]$/, '');
+            activeModalTicker = ticker;
             document.getElementById('modal-ticker-title').innerText = `${activeModalTicker} - Ficha Técnica y Flujo de Fondos`;
             document.getElementById('cashflow-modal').classList.remove('hidden');
 
@@ -917,7 +933,18 @@
             tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">Cargando flujos de fondos...</td></tr>`;
 
             try {
-                const res = await fetch(`/api/v1/bonds/${activeModalTicker}/cashflows`);
+                const res = await fetch(`/api/v1/bonds/${encodeURIComponent(activeModalTicker)}/cashflows`);
+                if (res.status === 422 || res.status === 404) {
+                    let detail = 'Cronograma no disponible para este título.';
+                    try { detail = (await res.json()).detail || detail; } catch (_) {}
+                    const td = document.createElement('td');
+                    td.colSpan = 5;
+                    td.className = 'text-center py-6 text-amber-300';
+                    td.textContent = detail;
+                    tbody.replaceChildren(document.createElement('tr'));
+                    tbody.firstChild.appendChild(td);
+                    return;
+                }
                 if (!res.ok) throw new Error("Cashflow API error");
                 const cfs = await res.json();
 

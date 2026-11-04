@@ -202,12 +202,36 @@ El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `
 
 ### Ejecución de Pruebas
 ```powershell
-.\.venv\Scripts\pytest.exe backend/tests/ -v
+.\.venv\Scripts\pytest.exe backend/tests/ -q
 ```
+* Los tests usan una SQLite temporal (nunca `bonistas.db`) y datos de `backend/tests/fixtures/` (sin internet).
+* Los tests marcados `@pytest.mark.network` consultan APIs reales: `$env:RUN_NETWORK_TESTS="1"` para incluirlos.
 
-### Configuración vía Variables de Entorno
+### Configuración vía Variables de Entorno (o archivo `.env`, no versionado)
 * `PORT`: Puerto HTTP (por defecto `8050`).
-* `HOST`: Dirección de escucha (por defecto `0.0.0.0`).
-* `DATABASE_URL`: Cadena de conexión SQLAlchemy (por defecto `sqlite:///./bonistas.db`).
-* `POLLING_INTERVAL_SECONDS`: Intervalo de sincronización en segundos (por defecto `30`).
+* `HOST`: Dirección de escucha (por defecto `127.0.0.1`, solo esta PC; `0.0.0.0` para exponerlo en la red local).
+* `RELOAD`: recarga automática de código para desarrollo (por defecto `false`).
+* `DATABASE_URL`: Cadena de conexión SQLAlchemy (por defecto `sqlite:///./bonistas.db`, modo WAL).
+* `POLLING_INTERVAL_SECONDS`: Intervalo de sincronización en segundos (por defecto `60`).
+* `DISABLE_SCHEDULER` / `SKIP_STARTUP_INGESTION`: desactivan la ingesta automática (tests / desarrollo offline).
+* `COMMISSION_PCT` (`0.11`), `MIN_NET_PROFIT_PCT` (`0.40`), `TRADE_SIZE_USD` (`500`): parámetros operativos por defecto.
 
+---
+
+## 8. Registro de cambios v1.1
+
+### Etapa 1 — Correcciones (2026-11-04)
+* **Tickers**: `base_ticker()` quita solo el sufijo final D/C de bonos conocidos. Antes `"GD30".replace("D","")` daba `"G30"` y ningún Global encontraba su cronograma (se valuaban como bullet).
+* **Cronogramas AL/GD 2020** reescritos y verificados contra los flujos de CompararBonos (residual y tasa implícita de cada pago coinciden): step-ups de AL30 (1,75% recién desde ene-28), AL35 (4,125 → 4,75 → 5%), AE38 (5%), AL41 (3,5% hasta jul-29), GD46 (44 cuotas desde ene-25).
+* **Intereses corridos** de Bonares/Globales en **30/360** (VT AL30 05-nov-2026 = 64,1547, igual que el mercado). Genéricos: Actual/365 desde el último cupón real (antes, 30 días fijos).
+* **Modified Duration** = Macaulay / (1 + TIR), consistente con la TIR efectiva anual. Nota: Bonistas informa Macaulay / (1 + TIR/2); es una diferencia de convención (~6%).
+* **Valuación propia** solo para bonos con cronograma verificado; LECAP/CER/duales/etc. devuelven 422 en vez de números incorrectos (se incorporarán con CompararBonos en la etapa 2).
+* **Simulador de swaps**: sin precios inventados (404 si falta cotización), ambas patas en la misma moneda (MEP o pesos, 422 si no hay común), costo por defecto 0,11% todo incluido.
+* **Ratios AL/GD**: solo especie D contra especie D y mismo plazo; nunca se cae a `last_price` (que puede estar en pesos).
+* **CI vs 24hs**: las cotizaciones se consultan por plazo (`?settlement=CI|24HS`), nunca mezcladas.
+* **Ingesta**: descarta filas sin precio (antes se guardaban en 0), catálogo en memoria (sin N+1), fuentes secundarias tolerantes a fallas.
+* **Macro**: no se persisten valores inventados (CER/TAMAR/A3500 fijos, IPC de respaldo); el IPC se guarda con su fecha real.
+* **Estrategia Relative Value**: dispara solo con Z ≥ +1,1σ (antes el umbral de 130 bps estaba por debajo de la media y quedaba siempre activa).
+* **Infra**: SQLite en WAL, scheduler con `max_instances=1`, CORS restringido, `HOST` por defecto local, polling 60 s.
+* **Tests**: aislados de la base real y de internet; 83 tests (antes 29), ~5 s (antes ~60 s).
+* **Limpieza de datos** en `bonistas.db` (respaldo en `bonistas.backup-2026-11-04.db`): 13.248 snapshots con precio 0 y 4 indicadores macro ficticios eliminados.

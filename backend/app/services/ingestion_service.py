@@ -15,8 +15,18 @@ from backend.app.data.bonistas_client import BonistasClient
 from backend.app.data.dolar_api_client import DolarApiClient
 from backend.app.data.macro_connectors import MacroDataConnector
 from backend.app.schemas.snapshot import BondQuoteView
+from backend.app.schemas.macro import MacroIndicatorCreate
 
 logger = logging.getLogger(__name__)
+
+
+def _positive(value: Any) -> Optional[float]:
+    """Devuelve el número si es un precio válido (> 0); None si falta o es 0/negativo."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
 
 class IngestionService:
     def __init__(
@@ -71,10 +81,27 @@ class IngestionService:
         self.seed_initial_bonds(db)
 
         # 1. Obtener datos externos
+        # La fuente de bonos es crítica: si falla, el ciclo falla.
         bonds_data = await self.bonistas.fetch_bonds()
-        fx_data = await self.bonistas.fetch_fx()
-        dolar_quotes = await self.dolar_api.get_rates_dict()
-        macro_data = await self.macro.fetch_macro_snapshot()
+        # Las demás son complementarias: si fallan se registra y se sigue con lo disponible.
+        warnings: List[str] = []
+        fx_data: List[Dict[str, Any]] = []
+        dolar_quotes: Dict[str, float] = {}
+        macro_data: Dict[str, MacroIndicatorCreate] = {}
+        try:
+            fx_data = await self.bonistas.fetch_fx()
+        except Exception as e:
+            warnings.append(f"FX bonistas no disponible: {e}")
+        try:
+            dolar_quotes = await self.dolar_api.get_rates_dict()
+        except Exception as e:
+            warnings.append(f"DolarAPI no disponible: {e}")
+        try:
+            macro_data = await self.macro.fetch_macro_snapshot()
+        except Exception as e:
+            warnings.append(f"Datos macro no disponibles: {e}")
+        for w in warnings:
+            logger.warning(w)
 
         # Indexar FX por ticker limpio (ej: AL30_24hs -> AL30)
         fx_map: Dict[str, Dict[str, Any]] = {}
@@ -88,6 +115,8 @@ class IngestionService:
 
         now = datetime.now(timezone.utc)
         snapshots_created = 0
+        skipped_without_price = 0
+        bonds_by_ticker: Dict[str, Bond] = {b.ticker: b for b in db.execute(select(Bond)).scalars()}
 
         # Mapeo de tickers y normalización
         for b_raw in bonds_data:
@@ -104,7 +133,7 @@ class IngestionService:
                 base_ticker = base_ticker.split("_")[0]
 
             # Buscar si existe el bono en el maestro
-            bond = db.execute(select(Bond).where(Bond.ticker == base_ticker)).scalar_one_or_none()
+            bond = bonds_by_ticker.get(base_ticker)
             if not bond:
                 # Si no está en el catálogo, inferir y registrar dinámicamente
                 family = b_raw.get("bond_family", "") or ""
@@ -144,19 +173,20 @@ class IngestionService:
                 )
                 db.add(bond)
                 db.flush()
+                bonds_by_ticker[base_ticker] = bond
 
             # Extraer precios de las 3 especies
             price_ars = None
             price_mep = None
             price_ccl = None
-            last_price = b_raw.get("last_price")
+            last_price = _positive(b_raw.get("last_price"))
 
             # Cruzar con fx_map para obtener simultáneamente ARS, D y C
             fx_info = fx_map.get(f"{base_ticker}_{settlement}") or fx_map.get(f"{base_ticker}_24HS")
             if fx_info:
-                price_ars = fx_info.get("price_ars")
-                price_mep = fx_info.get("price_usd")
-                price_ccl = fx_info.get("price_cable")
+                price_ars = _positive(fx_info.get("price_ars"))
+                price_mep = _positive(fx_info.get("price_usd"))
+                price_ccl = _positive(fx_info.get("price_cable"))
             else:
                 # Si el ticker termina en D (especie MEP)
                 if raw_ticker.endswith("D") and len(raw_ticker) in (5, 6):
@@ -165,6 +195,11 @@ class IngestionService:
                     price_ccl = last_price
                 elif bond.currency == "ARS":
                     price_ars = last_price
+
+            # Sin ningún precio válido no hay cotización: no se guarda un snapshot "en cero"
+            if not any((last_price, price_ars, price_mep, price_ccl)):
+                skipped_without_price += 1
+                continue
 
             # Conversión de métricas financieras
             fair_val = b_raw.get("fair_value")
@@ -209,33 +244,47 @@ class IngestionService:
             else:
                 db.add(MacroIndicator(date=today, name=name, value=Decimal(str(v)), source="DolarAPI"))
 
-        for k, v in macro_data.items():
+        for name, item in macro_data.items():
             existing_macro = db.execute(
-                select(MacroIndicator).where(MacroIndicator.date == today, MacroIndicator.name == k)
+                select(MacroIndicator).where(MacroIndicator.date == item.date, MacroIndicator.name == name)
             ).scalar_one_or_none()
             if existing_macro:
-                existing_macro.value = v
+                existing_macro.value = item.value
+                existing_macro.source = item.source
             else:
-                db.add(MacroIndicator(date=today, name=k, value=v, source="MacroConnector"))
+                db.add(MacroIndicator(date=item.date, name=name, value=item.value, source=item.source))
 
         db.commit()
-        logger.info(f"Ingesta finalizada exitosamente: {snapshots_created} snapshots registrados.")
+        logger.info(
+            f"Ingesta finalizada: {snapshots_created} snapshots registrados, "
+            f"{skipped_without_price} filas sin precio descartadas."
+        )
 
         return {
             "timestamp": now.isoformat(),
             "snapshots_created": snapshots_created,
+            "skipped_without_price": skipped_without_price,
             "dolares": dolar_quotes,
-            "macro": {k: float(v) for k, v in macro_data.items()}
+            "macro": {k: float(v.value) for k, v in macro_data.items()},
+            "warnings": warnings,
         }
 
-    def get_latest_quotes(self, db: Session, bond_type: Optional[str] = None) -> List[BondQuoteView]:
-        """Obtiene las cotizaciones más recientes consolidadas para cada bono."""
-        # Subconsulta del timestamp más reciente por ticker
+    def get_latest_quotes(
+        self,
+        db: Session,
+        bond_type: Optional[str] = None,
+        settlement: str = "24HS"
+    ) -> List[BondQuoteView]:
+        """
+        Cotizaciones más recientes de cada bono para UN plazo de liquidación (CI o 24HS).
+        Nunca se mezclan plazos: comparar AL CI contra GD 24hs distorsiona cualquier ratio.
+        """
         subq = (
             select(
                 PriceSnapshot.ticker,
                 func.max(PriceSnapshot.id).label("max_id")
             )
+            .where(PriceSnapshot.settlement_type == settlement.upper())
             .group_by(PriceSnapshot.ticker)
             .subquery()
         )
@@ -247,7 +296,7 @@ class IngestionService:
         )
 
         if bond_type:
-            query = query.where(Bond.bond_type == bond_type)
+            query = query.where(Bond.bond_type == bond_type.upper())
 
         results = db.execute(query).all()
         quotes = []

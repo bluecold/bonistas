@@ -55,8 +55,15 @@ class SwapRequest(BaseModel):
     sell_ticker: str = Field(..., description="Ticker del bono a vender, ej: GD30")
     buy_ticker: str = Field(..., description="Ticker del bono a comprar, ej: AL30")
     sell_nominal: float = Field(10000.0, gt=0, description="Cantidad nominal a vender")
-    broker_commission_pct: float = Field(0.5, ge=0.0, le=5.0, description="Comisión del broker en %")
-    byma_fee_pct: float = Field(0.04, ge=0.0, le=1.0, description="Derechos de mercado BYMA en %")
+    broker_commission_pct: float = Field(
+        0.11, ge=0.0, le=5.0,
+        description="Costo por operación en % (comisión + derechos + impuestos). Default: 0,11% todo incluido"
+    )
+    byma_fee_pct: float = Field(
+        0.0, ge=0.0, le=1.0,
+        description="Derechos de mercado adicionales en %, solo si NO están incluidos en la comisión"
+    )
+    settlement: str = Field("24HS", pattern="^(?i:CI|24HS)$", description="Plazo de liquidación: CI o 24HS")
 
 class SwapResponse(BaseModel):
     sell_ticker: str
@@ -76,4 +83,6 @@ class SwapResponse(BaseModel):
     yield_pickup_bps: Optional[float] = None
     duration_change: Optional[float] = None
     summary_message: str
+    currency: str = "USD"
+    settlement: str = "24HS"
 

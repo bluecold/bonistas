@@ -27,7 +27,7 @@ Una vez iniciado:
 ```bash
 .\.venv\Scripts\pytest.exe backend/tests/ -v
 ```
-*(29 pruebas unitarias y de integración pasando al 100%)*
+*(83 pruebas, offline y sobre una base temporal: no tocan `bonistas.db` ni necesitan internet)*
 
 ---
 
@@ -96,5 +96,5 @@ bonistas/
 1. **Monitor en Tiempo Real**: Tablas completas con filtrado por tipología de activo, cálculo simultáneo de especies (Pesos, MEP, Cable) y tipos de cambio implícitos.
 2. **Curvas de Rendimiento Interactivas (Plotly.js)**: Gráfico de dispersión *Modified Duration vs. TIR (%)* con tooltip hover detallado y diferenciación visual de bonos según jurisdicción.
 3. **Arbitrage Command Center**: Semáforos bursátiles (Verde / Amarillo / Rojo) y tarjetas de ejecución de trades con justificación cuantitativa y Z-score.
-4. **Simulador de Swaps**: Calculadora donde el trader ingresa nominales a vender y el sistema computa los nominales a recibir del bono destino, descontando la comisión del broker (ej. 0.5%) y los aranceles de BYMA (0.04%).
+4. **Simulador de Swaps**: Calculadora donde el trader ingresa nominales a vender y el sistema computa los nominales a recibir del bono destino, descontando el costo por operación (por defecto 0,11% todo incluido). Ambas patas se valúan en la misma moneda (MEP o pesos).
 

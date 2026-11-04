@@ -8,11 +8,6 @@ def setup_test_db():
     Base.metadata.create_all(bind=engine)
     yield
 
-@pytest.fixture
-def client():
-    with TestClient(app) as test_client:
-        yield test_client
-
 def test_api_health(client):
     response = client.get("/api/v1/health")
     assert response.status_code == 200
@@ -94,8 +89,8 @@ def test_api_swap_calculator(client):
         "sell_ticker": "GD30",
         "buy_ticker": "AL30",
         "sell_nominal": 10000.0,
-        "broker_commission_pct": 0.5,
-        "byma_fee_pct": 0.04
+        "broker_commission_pct": 0.11,
+        "byma_fee_pct": 0.0
     }
     response = client.post("/api/v1/calculator/swap", json=payload)
     assert response.status_code == 200

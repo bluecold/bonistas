@@ -15,3 +15,5 @@ secrets/
 
 # Material personal / de trabajo (contiene cookies de sesión)
 temporal/
+*.db-wal
+*.db-shm

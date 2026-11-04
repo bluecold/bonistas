@@ -10,9 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from backend.app.config import settings
 from backend.app.db.session import engine, Base, SessionLocal
 from backend.app.db.models import Bond, PriceSnapshot, ArbitrageSignal, MacroIndicator
-from backend.app.services.ingestion_service import IngestionService
-from backend.app.arbitrage.engine import ArbitrageEngine
-from backend.app.api.routes import router as api_router
+from backend.app.api.routes import router as api_router, ingestion_service, arbitrage_engine
 
 # Configuración de Logging
 logging.basicConfig(
@@ -22,8 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger("bonistas_trading")
 
 scheduler = AsyncIOScheduler()
-ingestion_service = IngestionService()
-arbitrage_engine = ArbitrageEngine(ingestion_service)
+# Se reutilizan las mismas instancias que usan los endpoints (una sola fuente de verdad)
 
 async def scheduled_ingestion_job():
     """Tarea periódica para ingesta de cotizaciones y evaluación algorítmica de arbitrajes."""
@@ -51,32 +48,41 @@ async def lifespan(app: FastAPI):
         logger.info(f"Catálogo verificado. {count} bonos sembrados.")
         
         # Ejecutar una primera ingesta y evaluación al iniciar
-        try:
-            logger.info("Ejecutando ingesta inicial de mercado...")
-            await ingestion_service.ingest_market_data(db)
-            logger.info("Ejecutando evaluación inicial de arbitrajes...")
-            arbitrage_engine.evaluate_all_strategies(db)
-        except Exception as e:
-            logger.warning(f"No se pudo completar la ingesta/evaluación inicial: {e}")
+        if settings.SKIP_STARTUP_INGESTION:
+            logger.info("Ingesta inicial omitida (SKIP_STARTUP_INGESTION).")
+        else:
+            try:
+                logger.info("Ejecutando ingesta inicial de mercado...")
+                await ingestion_service.ingest_market_data(db)
+                logger.info("Ejecutando evaluación inicial de arbitrajes...")
+                arbitrage_engine.evaluate_all_strategies(db)
+            except Exception as e:
+                logger.warning(f"No se pudo completar la ingesta/evaluación inicial: {e}")
     finally:
         db.close()
 
     # 3. Iniciar programador de tareas periódico
-    scheduler.add_job(
-        scheduled_ingestion_job,
-        "interval",
-        seconds=settings.POLLING_INTERVAL_SECONDS,
-        id="market_ingestion",
-        replace_existing=True
-    )
-    scheduler.start()
-    logger.info(f"Programador de tareas iniciado. Intervalo: {settings.POLLING_INTERVAL_SECONDS}s.")
+    if not settings.DISABLE_SCHEDULER:
+        scheduler.add_job(
+            scheduled_ingestion_job,
+            "interval",
+            seconds=settings.POLLING_INTERVAL_SECONDS,
+            id="market_ingestion",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        scheduler.start()
+        logger.info(f"Programador de tareas iniciado. Intervalo: {settings.POLLING_INTERVAL_SECONDS}s.")
+    else:
+        logger.info("Programador de tareas deshabilitado (DISABLE_SCHEDULER).")
 
     yield
 
     # Shutdown
-    logger.info("Deteniendo programador de tareas...")
-    scheduler.shutdown()
+    if scheduler.running:
+        logger.info("Deteniendo programador de tareas...")
+        scheduler.shutdown()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -85,12 +91,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuración CORS para React / Vite
+# CORS: el dashboard se sirve desde el mismo origen, así que solo se habilitan orígenes locales
+# de desarrollo (ej. Vite). Sin credenciales: no hay cookies que compartir entre orígenes.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=[
+        f"http://localhost:{settings.PORT}",
+        f"http://127.0.0.1:{settings.PORT}",
+        "http://localhost:5173",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -110,5 +121,5 @@ def serve_dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    uvicorn.run("backend.main:app", host=settings.HOST, port=settings.PORT, reload=settings.RELOAD)
 

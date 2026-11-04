@@ -55,6 +55,7 @@ def test_seed_initial_bonds(db_session):
     assert tx26 is not None
     assert tx26.bond_type == "CER"
 
+@pytest.mark.network
 @pytest.mark.asyncio
 async def test_dolar_api_client():
     """Verifica la conectividad y respuesta del cliente DolarAPI."""

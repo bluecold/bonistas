@@ -14,7 +14,12 @@ from backend.app.db.models import ArbitrageSignal, MacroIndicator
 from backend.app.schemas.arbitrage import ArbitrageSignalCreate
 from backend.app.schemas.snapshot import BondQuoteView
 from backend.app.services.ingestion_service import IngestionService
-from backend.app.arbitrage.strategies import ArbitrageStrategies
+from backend.app.arbitrage.strategies import (
+    ArbitrageStrategies,
+    HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS,
+    HISTORICAL_AL30_GD29_SPREAD_STD_BPS,
+    RV_Z_THRESHOLD,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +122,9 @@ class ArbitrageEngine:
         for al, gd in [("AL29", "GD29"), ("AL30", "GD30"), ("AL35", "GD35"), ("AE38", "GD38"), ("AL41", "GD41")]:
             q_al = quotes_dict.get(al)
             q_gd = quotes_dict.get(gd)
-            p_al = q_al.price_mep or q_al.last_price if q_al else None
-            p_gd = q_gd.price_mep or q_gd.last_price if q_gd else None
+            # Solo especie D (MEP): last_price puede estar en pesos y distorsionar el ratio
+            p_al = q_al.price_mep if q_al else None
+            p_gd = q_gd.price_mep if q_gd else None
             ratio = round(p_gd / p_al, 4) if p_al and p_gd and p_al > 0 else None
             
             traffic_light = "RED"
@@ -152,12 +158,13 @@ class ArbitrageEngine:
         rv_desc = "Curva en rango normal"
         if q_al30 and q_gd29 and q_al30.ytm_percentage and q_gd29.ytm_percentage:
             rv_spread_bps = round((q_al30.ytm_percentage - q_gd29.ytm_percentage) * 100.0, 1)
-            if rv_spread_bps >= 130.0:
+            rv_z = (rv_spread_bps - HISTORICAL_AL30_GD29_SPREAD_MEAN_BPS) / HISTORICAL_AL30_GD29_SPREAD_STD_BPS
+            if rv_z >= RV_Z_THRESHOLD:
                 rv_light = "GREEN"
-                rv_desc = f"Arbitraje Convexidad Activo: Spread AL30 vs GD29 en {rv_spread_bps} bps."
-            elif rv_spread_bps >= 90.0:
+                rv_desc = f"Arbitraje Convexidad Activo: Spread AL30 vs GD29 en {rv_spread_bps} bps ({rv_z:+.2f}σ)."
+            elif rv_z >= RV_Z_THRESHOLD / 2:
                 rv_light = "YELLOW"
-                rv_desc = f"En Observación: Spread ampliándose ({rv_spread_bps} bps)."
+                rv_desc = f"En Observación: Spread ampliándose ({rv_spread_bps} bps, {rv_z:+.2f}σ)."
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),

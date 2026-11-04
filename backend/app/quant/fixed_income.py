@@ -9,35 +9,46 @@ from datetime import date
 from typing import List, Optional, Tuple
 from scipy.optimize import brentq
 
-from backend.app.quant.cashflows import CashFlowItem, get_hard_dollar_schedule
+from backend.app.quant.cashflows import CashFlowItem, get_hard_dollar_schedule, generic_coupon_dates
 
 logger = logging.getLogger(__name__)
+
+def days_30_360(start: date, end: date) -> int:
+    """Cuenta de días 30/360 (convención bond basis) usada por Bonares y Globales 2020."""
+    d1 = min(start.day, 30)
+    d2 = end.day
+    if d2 == 31 and d1 >= 30:
+        d2 = 30
+    return (end.year - start.year) * 360 + (end.month - start.month) * 30 + (d2 - d1)
+
 
 def calculate_accrued_interest(
     ticker: str,
     settlement_date: date,
     coupon_rate: Optional[float] = None,
     base_nominal: float = 100.0,
-    frequency: int = 2
+    frequency: int = 2,
+    maturity_date: Optional[date] = None
 ) -> float:
     """
-    Calcula los intereses corridos devengados desde el último cupón hasta la fecha de liquidación.
-    Convención de mercado argentino: Actual/365 sobre capital residual vigente.
+    Intereses corridos desde el último pago hasta la fecha de liquidación.
+
+    - Bonares / Globales 2020: 30/360 sobre el capital residual vigente y con la tasa del
+      período en curso (verificado: AL30 al 05-nov-2026 da VT 64,1547, igual que el mercado).
+    - Bonos genéricos con cupón: Actual/365 desde el último cupón real (requiere vencimiento).
     """
     schedule = get_hard_dollar_schedule(ticker)
-    
+
     if schedule:
-        # Encontrar el último cupón pasado y el próximo futuro
+        factor = base_nominal / 100.0
         last_coupon_date: Optional[date] = None
         next_coupon: Optional[dict] = None
         current_residual = base_nominal
 
         for event in schedule:
-            d = event["date"]
-            if d <= settlement_date:
-                last_coupon_date = d
-                current_residual -= (event["amort_pct"] / 100.0) * base_nominal
-                current_residual = max(0.0, current_residual)
+            if event["date"] <= settlement_date:
+                last_coupon_date = event["date"]
+                current_residual = max(0.0, current_residual - event["amort_pct"] * factor)
             else:
                 next_coupon = event
                 break
@@ -45,33 +56,32 @@ def calculate_accrued_interest(
         if not last_coupon_date or not next_coupon or current_residual <= 0:
             return 0.0
 
-        days_accrued = (settlement_date - last_coupon_date).days
-        c_rate = next_coupon["coupon_tna"]
-        
-        # Interés corrido = Residual * TNA * (días / 365)
-        accrued = current_residual * c_rate * (days_accrued / 365.0)
+        days = days_30_360(last_coupon_date, settlement_date)
+        accrued = current_residual * next_coupon["coupon_tna"] * (days / 360.0)
         return float(round(accrued, 4))
 
-    # Genérico para bonos regulares
     c_rate = float(coupon_rate) if coupon_rate is not None else 0.0
-    if c_rate <= 0:
+    if c_rate <= 0 or maturity_date is None or settlement_date >= maturity_date:
         return 0.0
-    
-    # Estimación semestral estándar (182.5 días promedio)
-    return float(round(base_nominal * c_rate * (30.0 / 365.0), 4))
+
+    last_coupon, _ = generic_coupon_dates(settlement_date, maturity_date, frequency)
+    if last_coupon is None:
+        return 0.0
+    days = (settlement_date - last_coupon).days
+    return float(round(base_nominal * c_rate * (days / 365.0), 4))
 
 
 def calculate_residual_capital(ticker: str, settlement_date: date, base_nominal: float = 100.0) -> float:
-    """Calcula el capital residual después de amortizaciones históricas."""
+    """Capital residual después de las amortizaciones pagadas hasta la fecha de liquidación."""
     schedule = get_hard_dollar_schedule(ticker)
     if not schedule:
         return base_nominal
 
+    factor = base_nominal / 100.0
     residual = base_nominal
     for event in schedule:
         if event["date"] <= settlement_date:
-            residual -= (event["amort_pct"] / 100.0) * base_nominal
-            residual = max(0.0, residual)
+            residual = max(0.0, residual - event["amort_pct"] * factor)
     return float(round(residual, 4))
 
 
@@ -165,25 +175,29 @@ def calculate_duration_and_md(
     frequency: int = 2
 ) -> Tuple[Optional[float], Optional[float]]:
     """
-    Calcula la Duración de Macaulay y la Modified Duration (MD).
-    MD = Macaulay Duration / (1 + YTM / frequency)
+    Duración de Macaulay y Modified Duration (MD).
+
+    La TIR se resuelve como tasa EFECTIVA anual con descuento (1 + r)^(días/365), por lo que
+    la MD consistente es: MD = Macaulay / (1 + TIR). (`frequency` se mantiene por compatibilidad.)
     """
     if price <= 0 or ytm is None or ytm <= -1.0 or not cashflows:
         return None, None
 
     weighted_pv_sum = 0.0
+    pv_sum = 0.0
     for cf in cashflows:
         t = cf.days_from_settlement / 365.0
         pv_cf = cf.total_cashflow / ((1.0 + ytm) ** t)
         weighted_pv_sum += t * pv_cf
+        pv_sum += pv_cf
 
-    macaulay_duration = weighted_pv_sum / price
-    
-    if frequency <= 0:
-        frequency = 1
-    
-    modified_duration = macaulay_duration / (1.0 + (ytm / frequency))
-    
+    if pv_sum <= 0:
+        return None, None
+
+    # Se pondera por el valor presente de los flujos (igual al precio sucio en la TIR resuelta)
+    macaulay_duration = weighted_pv_sum / pv_sum
+    modified_duration = macaulay_duration / (1.0 + ytm)
+
     return float(round(macaulay_duration, 4)), float(round(modified_duration, 4))
 
 

@@ -38,6 +38,8 @@ from backend.app.schemas.arbitrage import (
 )
 from backend.app.arbitrage.engine import ArbitrageEngine
 from backend.app.services.ingestion_service import IngestionService
+from backend.app.quant.cashflows import base_ticker, has_verified_schedule
+from backend.app.config import settings
 
 router = APIRouter()
 ingestion_service = IngestionService()
@@ -48,7 +50,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "Sistema de Arbitraje de Bonos Argentinos",
-        "phase": "Fase 1 - Ingesta & Base de Datos"
+        "version": settings.VERSION
     }
 
 @router.get("/bonds", response_model=List[BondResponse], tags=["Bonds"])
@@ -78,10 +80,11 @@ def get_bond(ticker: str, db: Session = Depends(get_db)):
 @router.get("/quotes", response_model=List[BondQuoteView], tags=["Market Data"])
 def get_latest_quotes(
     bond_type: Optional[str] = Query(None, description="Filtrar por tipo: HARD_DOLLAR, CER, TASA_FIJA, DUAL, BOPREAL, DOLLAR_LINKED"),
+    settlement: str = Query("24HS", pattern="^(?i:CI|24HS)$", description="Plazo de liquidación: CI o 24HS"),
     db: Session = Depends(get_db)
 ):
-    """Obtiene las cotizaciones y métricas más recientes de los bonos en cartera."""
-    quotes = ingestion_service.get_latest_quotes(db, bond_type=bond_type)
+    """Obtiene las cotizaciones y métricas más recientes de los bonos para un plazo de liquidación."""
+    quotes = ingestion_service.get_latest_quotes(db, bond_type=bond_type, settlement=settlement)
     return quotes
 
 @router.get("/macro", tags=["Macro"])
@@ -115,6 +118,41 @@ async def trigger_ingestion(db: Session = Depends(get_db)):
 # ENDPOINTS CUANTITATIVOS (FASE 2)
 # ==========================================
 
+def _find_bond(db: Session, ticker: str) -> Optional[Bond]:
+    """Busca un bono por ticker exacto o por su ticker base (AL30D -> AL30)."""
+    t = ticker.strip().upper()
+    bond = db.execute(select(Bond).where(Bond.ticker == t)).scalar_one_or_none()
+    if bond is None and base_ticker(t) != t:
+        bond = db.execute(select(Bond).where(Bond.ticker == base_ticker(t))).scalar_one_or_none()
+    return bond
+
+
+def _require_verified_schedule(bond: Bond) -> None:
+    """
+    La valuación propia solo es confiable para bonos con cronograma verificado.
+    Para LECAP/BONCAP (capitalizables), CER, duales, dollar linked, etc. el modelo genérico
+    daría números incorrectos, así que se rechaza explícitamente en lugar de inventarlos.
+    """
+    if not has_verified_schedule(bond.ticker):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Valuación propia aún no disponible para {bond.ticker} ({bond.bond_type}). "
+                "Por ahora solo se soportan Bonares y Globales 2020 (AL/AE/GD); el resto se "
+                "incorporará con los flujos de CompararBonos."
+            ),
+        )
+
+
+def _latest_snapshot(db: Session, ticker: str, settlement: str = "24HS") -> Optional[PriceSnapshot]:
+    """Último snapshot de un ticker en un plazo de liquidación concreto (CI o 24HS)."""
+    return db.execute(
+        select(PriceSnapshot)
+        .where(PriceSnapshot.ticker == ticker.upper(), PriceSnapshot.settlement_type == settlement.upper())
+        .order_by(PriceSnapshot.id.desc())
+    ).scalars().first()
+
+
 @router.get("/bonds/{ticker}/cashflows", response_model=List[CashFlowItemResponse], tags=["Quant Analytics"])
 def get_bond_cashflows(
     ticker: str,
@@ -122,14 +160,13 @@ def get_bond_cashflows(
     db: Session = Depends(get_db)
 ):
     """Obtiene el vector cronológico completo de flujos de fondos futuros del bono."""
-    clean_ticker = ticker.upper()
-    bond = db.execute(select(Bond).where(Bond.ticker == clean_ticker)).scalar_one_or_none()
+    bond = _find_bond(db, ticker)
     if not bond:
         raise HTTPException(status_code=404, detail=f"Bono '{ticker}' no encontrado en el maestro.")
+    _require_verified_schedule(bond)
 
     s_date = settlement_date or date.today()
-    c_rate = float(bond.coupon_rate) if bond.coupon_rate is not None else 0.0
-    cfs = generate_cashflows(clean_ticker, s_date, bond.maturity_date, coupon_rate=c_rate)
+    cfs = generate_cashflows(bond.ticker, s_date, bond.maturity_date)
 
     return [
         CashFlowItemResponse(
@@ -150,20 +187,20 @@ def calculate_bond_valuation(
     db: Session = Depends(get_db)
 ):
     """Calcula Valor Técnico, Paridad, TIR/YTM (Newton-Raphson), Duration y TEM para un precio dado."""
-    clean_ticker = request.ticker.upper()
-    bond = db.execute(select(Bond).where(Bond.ticker == clean_ticker)).scalar_one_or_none()
+    bond = _find_bond(db, request.ticker)
     if not bond:
         raise HTTPException(status_code=404, detail=f"Bono '{request.ticker}' no encontrado.")
+    _require_verified_schedule(bond)
+    clean_ticker = bond.ticker
 
     s_date = request.settlement_date or date.today()
-    c_rate = float(bond.coupon_rate) if bond.coupon_rate is not None else 0.0
 
     res_cap = calculate_residual_capital(clean_ticker, s_date)
-    accrued = calculate_accrued_interest(clean_ticker, s_date, coupon_rate=c_rate)
+    accrued = calculate_accrued_interest(clean_ticker, s_date)
     vt = calculate_technical_value(res_cap, accrued)
     parity = calculate_parity(request.price, vt)
 
-    cfs = generate_cashflows(clean_ticker, s_date, bond.maturity_date, coupon_rate=c_rate)
+    cfs = generate_cashflows(clean_ticker, s_date, bond.maturity_date)
     ytm = calculate_ytm(request.price, cfs)
 
     tem = None
@@ -223,9 +260,10 @@ def get_breakeven_inflation_route(
             r_cer = float(snap_cer.ytm_percentage)
 
     if r_fixed is None or r_cer is None:
-        # Valores de referencia de mercado por omisión
-        r_fixed = r_fixed or 26.8
-        r_cer = r_cer or 7.5
+        raise HTTPException(
+            status_code=422,
+            detail="Faltan datos: indicar fixed_ytm/cer_ytm o tickers con TIR disponible en la base."
+        )
 
     be = calculate_breakeven_inflation(r_fixed / 100.0, r_cer / 100.0)
 
@@ -245,7 +283,10 @@ def get_breakeven_inflation_route(
     )
 
 @router.get("/arbitrage/law-spreads", response_model=List[LawSpreadPair], tags=["Quant Analytics"])
-def get_law_spreads(db: Session = Depends(get_db)):
+def get_law_spreads(
+    settlement: str = Query("24HS", description="Plazo de liquidación: CI o 24HS"),
+    db: Session = Depends(get_db)
+):
     """Retorna la matriz de pares gemelos Ley Local vs Ley Nueva York (AL vs GD) con ratios y yield spreads."""
     pairs = [
         ("AL29", "GD29"),
@@ -258,20 +299,12 @@ def get_law_spreads(db: Session = Depends(get_db)):
     results: List[LawSpreadPair] = []
 
     for al, gd in pairs:
-        snap_al = db.execute(
-            select(PriceSnapshot)
-            .where(PriceSnapshot.ticker == al)
-            .order_by(PriceSnapshot.timestamp.desc())
-        ).scalars().first()
+        snap_al = _latest_snapshot(db, al, settlement)
+        snap_gd = _latest_snapshot(db, gd, settlement)
 
-        snap_gd = db.execute(
-            select(PriceSnapshot)
-            .where(PriceSnapshot.ticker == gd)
-            .order_by(PriceSnapshot.timestamp.desc())
-        ).scalars().first()
-
-        p_al = float(snap_al.price_mep or snap_al.last_price) if snap_al else None
-        p_gd = float(snap_gd.price_mep or snap_gd.last_price) if snap_gd else None
+        # Solo especie D (dólar MEP) contra especie D: nunca mezclar con precios en pesos
+        p_al = float(snap_al.price_mep) if snap_al and snap_al.price_mep else None
+        p_gd = float(snap_gd.price_mep) if snap_gd and snap_gd.price_mep else None
         ytm_al = float(snap_al.ytm_percentage) / 100.0 if snap_al and snap_al.ytm_percentage else None
         ytm_gd = float(snap_gd.ytm_percentage) / 100.0 if snap_gd and snap_gd.ytm_percentage else None
 
@@ -316,23 +349,34 @@ def simulate_swap_endpoint(
     db: Session = Depends(get_db)
 ):
     """Simula una rotación o swap de bonos calculando nominales resultantes, comisiones e impacto en cartera."""
-    sell_t = request.sell_ticker.upper()
-    buy_t = request.buy_ticker.upper()
+    sell_t = request.sell_ticker.strip().upper()
+    buy_t = request.buy_ticker.strip().upper()
+    settlement = request.settlement.upper()
 
-    snap_sell = db.execute(
-        select(PriceSnapshot).where(PriceSnapshot.ticker == sell_t).order_by(PriceSnapshot.timestamp.desc())
-    ).scalars().first()
+    snap_sell = _latest_snapshot(db, sell_t, settlement)
+    snap_buy = _latest_snapshot(db, buy_t, settlement)
+    missing = [t for t, snap in ((sell_t, snap_sell), (buy_t, snap_buy)) if snap is None]
+    if missing:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Sin cotización {settlement} para: {', '.join(missing)}."
+        )
 
-    snap_buy = db.execute(
-        select(PriceSnapshot).where(PriceSnapshot.ticker == buy_t).order_by(PriceSnapshot.timestamp.desc())
-    ).scalars().first()
+    # Ambas patas en la MISMA moneda: primero dólar MEP (especie D), si no pesos.
+    if snap_sell.price_mep and snap_buy.price_mep:
+        p_sell, p_buy, currency = float(snap_sell.price_mep), float(snap_buy.price_mep), "USD"
+    elif snap_sell.price_ars and snap_buy.price_ars:
+        p_sell, p_buy, currency = float(snap_sell.price_ars), float(snap_buy.price_ars), "ARS"
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{sell_t} y {buy_t} no tienen precio en una moneda común (MEP o pesos)."
+        )
 
-    p_sell = float(snap_sell.price_mep or snap_sell.last_price) if snap_sell else 54.49
-    p_buy = float(snap_buy.price_mep or snap_buy.last_price) if snap_buy else 52.71
-    ytm_sell = float(snap_sell.ytm_percentage) / 100.0 if snap_sell and snap_sell.ytm_percentage else 0.185
-    ytm_buy = float(snap_buy.ytm_percentage) / 100.0 if snap_buy and snap_buy.ytm_percentage else 0.201
-    md_sell = float(snap_sell.modified_duration) if snap_sell and snap_sell.modified_duration else 1.29
-    md_buy = float(snap_buy.modified_duration) if snap_buy and snap_buy.modified_duration else 1.66
+    ytm_sell = float(snap_sell.ytm_percentage) / 100.0 if snap_sell.ytm_percentage else None
+    ytm_buy = float(snap_buy.ytm_percentage) / 100.0 if snap_buy.ytm_percentage else None
+    md_sell = float(snap_sell.modified_duration) if snap_sell.modified_duration else None
+    md_buy = float(snap_buy.modified_duration) if snap_buy.modified_duration else None
 
     res = simulate_bond_swap(
         sell_ticker=sell_t,
@@ -365,7 +409,9 @@ def simulate_swap_endpoint(
         nominal_pickup=res.nominal_pickup,
         yield_pickup_bps=res.yield_pickup_bps,
         duration_change=res.duration_change,
-        summary_message=res.summary_message
+        summary_message=res.summary_message,
+        currency=currency,
+        settlement=settlement
     )
 
 @router.get("/arbitrage/signals", response_model=List[ArbitrageSignalResponse], tags=["Arbitrage Engine"])

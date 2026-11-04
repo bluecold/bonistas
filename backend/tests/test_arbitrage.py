@@ -27,11 +27,6 @@ def db_session():
         db.close()
         Base.metadata.drop_all(bind=engine)
 
-@pytest.fixture
-def client():
-    with TestClient(app) as test_client:
-        yield test_client
-
 def test_law_premium_rule_a_compression():
     """Verifica Regla A: Compresión de ratio legal <= 1.01 dispara ROTAR_A_NY."""
     quotes = {
