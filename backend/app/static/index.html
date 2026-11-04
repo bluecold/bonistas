@@ -87,16 +87,16 @@
                     <span id="header-canje" class="text-amber-400 font-bold">+6.21%</span>
                 </div>
                 <div class="flex items-center gap-2 bg-brand-elevated/70 px-3 py-1.5 rounded-lg border border-brand-border">
-                    <span class="text-slate-400 font-sans text-[11px]">Oficial Mayorista:</span>
+                    <span class="text-slate-400 font-sans text-[11px]">Mayorista A3500:</span>
                     <span id="header-oficial" class="text-slate-300 font-bold">$1,547.00</span>
                 </div>
             </div>
 
             <!-- Actions & Status -->
             <div class="flex items-center gap-2.5">
-                <div class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span class="hidden sm:inline">Rueda en Vivo</span>
+                <div id="market-status-badge" title="Consultando estado..." class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20 cursor-help">
+                    <span id="market-status-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span id="market-status-text" class="hidden sm:inline">Estado...</span>
                 </div>
                 <button onclick="refreshAllData()" id="btn-refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition shadow-sm active:scale-95">
                     <i data-lucide="refresh-cw" id="refresh-icon" class="w-3.5 h-3.5"></i>
@@ -427,9 +427,11 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             renderIcons();
+            fetchStatus();
             fetchMacro();
             fetchQuotes();
             fetchArbitrage();
+            setInterval(fetchStatus, 60000);
 
             // Auto-polling cada 15 segundos
             setInterval(() => {
@@ -465,6 +467,39 @@
         }
 
         // ==================== DATA FETCHING ====================
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/v1/status');
+                if (!res.ok) return;
+                const st = await res.json();
+                const badge = document.getElementById('market-status-badge');
+                const dot = document.getElementById('market-status-dot');
+                const text = document.getElementById('market-status-text');
+                const sources = Object.values(st.sources || {});
+                const down = sources.filter(s => !s.healthy).map(s => s.name);
+                let label, tone;
+                if (!st.market.is_working_day) { label = 'Mercado cerrado (no hábil)'; tone = 'slate'; }
+                else if (st.market.polling_active) { label = `Rueda abierta · BYMA ${st.market.opening}-${st.market.closing}`; tone = 'emerald'; }
+                else { label = `Mercado cerrado · abre ${st.market.opening}`; tone = 'slate'; }
+                if (down.length) { label += ` · fuente caída: ${down.join(', ')}`; tone = 'amber'; }
+                const tones = {
+                    emerald: ['bg-emerald-500/10', 'text-emerald-400', 'border-emerald-500/20', 'bg-emerald-400'],
+                    amber: ['bg-amber-500/10', 'text-amber-300', 'border-amber-500/30', 'bg-amber-400'],
+                    slate: ['bg-slate-500/10', 'text-slate-400', 'border-slate-500/20', 'bg-slate-400'],
+                };
+                badge.className = `flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border cursor-help ${tones[tone].slice(0, 3).join(' ')}`;
+                dot.className = `w-2 h-2 rounded-full ${tones[tone][3]} ${tone === 'emerald' ? 'animate-pulse' : ''}`;
+                text.textContent = label;
+                const fmt = iso => iso ? new Date(iso).toLocaleTimeString('es-AR') : 'nunca';
+                badge.title = sources.length
+                    ? sources.map(s => `${s.name}: ${s.healthy ? 'OK' : 'ERROR'} · última OK ${fmt(s.last_success)}${s.last_error && !s.healthy ? ' · ' + s.last_error : ''}`).join('\n')
+                        + '\n\nBYMA Open Data publica con 20 min de demora.'
+                    : 'Sin consultas todavía';
+            } catch (err) {
+                console.error("Error fetching status:", err);
+            }
+        }
+
         async function fetchMacro() {
             try {
                 const res = await fetch('/api/v1/macro');
@@ -472,7 +507,8 @@
                 const data = await res.json();
                 if (data.DOLAR_BOLSA) document.getElementById('header-mep').innerText = `$${data.DOLAR_BOLSA.value.toFixed(2)}`;
                 if (data.DOLAR_CONTADOCONLIQUI) document.getElementById('header-ccl').innerText = `$${data.DOLAR_CONTADOCONLIQUI.value.toFixed(2)}`;
-                if (data.DOLAR_OFICIAL) document.getElementById('header-oficial').innerText = `$${data.DOLAR_OFICIAL.value.toFixed(2)}`;
+                const mayorista = data.A3500 || data.DOLAR_MAYORISTA;
+                if (mayorista) document.getElementById('header-oficial').innerText = `$${mayorista.value.toFixed(2)}`;
                 if (data.DOLAR_BOLSA && data.DOLAR_CONTADOCONLIQUI) {
                     const canje = ((data.DOLAR_CONTADOCONLIQUI.value / data.DOLAR_BOLSA.value) - 1.0) * 100.0;
                     document.getElementById('header-canje').innerText = `${canje > 0 ? '+' : ''}${canje.toFixed(2)}%`;
@@ -953,15 +989,19 @@
                     return;
                 }
 
+                const money = (v, d) => (v === null || v === undefined) ? '-' : `$${v.toFixed(d)}`;
+                const sourceNote = cfs[0].source === 'COMPARARBONOS'
+                    ? `<tr><td colspan="5" class="px-3 py-2 text-[11px] text-slate-500">Fuente: CompararBonos (flujo total por 100 VN; para CER, ajustado por el CER vigente).</td></tr>`
+                    : '';
                 tbody.innerHTML = cfs.map((cf, idx) => `
                     <tr class="${idx % 2 === 0 ? 'bg-brand-card' : 'bg-brand-elevated/30'}">
                         <td class="px-3 py-2 text-white">${cf.date}</td>
-                        <td class="px-3 py-2 text-right text-slate-300">$${cf.amortization_amount.toFixed(2)}</td>
-                        <td class="px-3 py-2 text-right text-slate-300">$${cf.coupon_amount.toFixed(4)}</td>
-                        <td class="px-3 py-2 text-right font-bold text-emerald-400">$${cf.total_cashflow.toFixed(4)}</td>
-                        <td class="px-3 py-2 text-right text-slate-400">$${cf.residual_capital.toFixed(2)}</td>
+                        <td class="px-3 py-2 text-right text-slate-300">${money(cf.amortization_amount, 2)}</td>
+                        <td class="px-3 py-2 text-right text-slate-300">${money(cf.coupon_amount, 4)}</td>
+                        <td class="px-3 py-2 text-right font-bold text-emerald-400">${money(cf.total_cashflow, 4)}</td>
+                        <td class="px-3 py-2 text-right text-slate-400">${money(cf.residual_capital, 2)}</td>
                     </tr>
-                `).join('');
+                `).join('') + sourceNote;
             } catch (err) {
                 console.error("Error loading cashflows:", err);
                 tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-rose-400">Error al cargar cronograma de flujos.</td></tr>`;

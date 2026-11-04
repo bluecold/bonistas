@@ -5,30 +5,35 @@ from datetime import date
 class CashFlowItemResponse(BaseModel):
     date: date
     days_from_settlement: int
-    interest_rate: float
-    coupon_amount: float
-    amortization_amount: float
+    interest_rate: Optional[float] = None
+    coupon_amount: Optional[float] = None
+    amortization_amount: Optional[float] = None
     total_cashflow: float
-    residual_capital: float
+    residual_capital: Optional[float] = None
+    source: str = "PROPIO"   # PROPIO (cronograma verificado) o COMPARARBONOS (solo flujo total)
 
 class ValuationRequest(BaseModel):
     ticker: str = Field(..., description="Ticker del bono, ej: AL30, GD30, GD29")
     price: float = Field(..., gt=0, description="Precio sucio (dirty price) en USD o ARS")
-    settlement_date: Optional[date] = Field(None, description="Fecha de liquidación (default: hoy)")
+    settlement_date: Optional[date] = Field(None, description="Fecha de liquidación (si se indica, prevalece)")
+    settlement: str = Field("24HS", pattern="^(?i:CI|24HS)$",
+                            description="Plazo si no se indica fecha: CI = hoy, 24HS = próximo día hábil")
 
 class ValuationResponse(BaseModel):
     ticker: str
     price: float
     settlement_date: date
-    residual_capital: float
-    accrued_interest: float
-    technical_value: float
-    parity_percentage: float
+    residual_capital: Optional[float] = None
+    accrued_interest: Optional[float] = None
+    technical_value: Optional[float] = None
+    parity_percentage: Optional[float] = None
     ytm_percentage: Optional[float] = None
     tem_percentage: Optional[float] = None
     tna_percentage: Optional[float] = None
     macaulay_duration: Optional[float] = None
     modified_duration: Optional[float] = None
+    source: str = "PROPIO"
+    yield_is_real: bool = False   # True para CER: la TIR es real (sobre inflación)
 
 class BreakevenResponse(BaseModel):
     fixed_ticker: Optional[str] = None

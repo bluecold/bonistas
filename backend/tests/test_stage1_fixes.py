@@ -207,10 +207,11 @@ def test_cashflows_endpoint_accepts_species_suffix(client):
     assert len(res.json()) == 8
 
 
-def test_valuation_rejects_unsupported_instruments(client):
-    res = client.post("/api/v1/calculator/valuation", json={"ticker": "S30N6", "price": 127.8})
+def test_valuation_rejects_instruments_without_flows(client):
+    """Los duales no publican flujos proyectables: 422 en lugar de inventarlos."""
+    res = client.post("/api/v1/calculator/valuation", json={"ticker": "TXMJ0", "price": 86.4})
     assert res.status_code == 422
-    assert "no disponible" in res.json()["detail"]
+    assert "Sin flujos" in res.json()["detail"]
 
 
 def test_swap_unknown_ticker_returns_404_instead_of_fake_prices(client):

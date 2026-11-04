@@ -29,6 +29,9 @@ from backend.app.data.bonistas_client import BonistasClient  # noqa: E402
 from backend.app.data.dolar_api_client import DolarApiClient  # noqa: E402
 from backend.app.data.macro_connectors import MacroDataConnector  # noqa: E402
 from backend.app.schemas.macro import MacroIndicatorCreate  # noqa: E402
+from backend.app.data.byma_client import BymaClient, MarketTime  # noqa: E402
+from backend.app.data.comparar_bonos_client import CompararBonosClient  # noqa: E402
+from backend.app.data.bcra_client import BcraClient  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUN_NETWORK = os.environ.get("RUN_NETWORK_TESTS") == "1"
@@ -82,6 +85,38 @@ def _install_offline_sources(monkeypatch):
     monkeypatch.setattr(DolarApiClient, "get_rates_dict", fake_rates)
     monkeypatch.setattr(MacroDataConnector, "fetch_macro_snapshot", fake_macro)
 
+    # --- Fuentes de la etapa 2 (respuestas reales recortadas, 04-nov-2026)
+    byma_rows = _load("byma_public_bonds.json")["data"]
+    cauciones = _load("byma_cauciones.json")
+    comparar = _load("comparar_bonos.json")
+
+    async def fake_books_raw(self):
+        return [dict(r) for r in byma_rows]
+
+    async def fake_cauciones(self):
+        return cauciones
+
+    async def fake_market_time(self):
+        from datetime import time
+        return MarketTime(is_working_day=True, opening=time(10, 30), closing=time(17, 0))
+
+    async def fake_comparar(self):
+        return comparar
+
+    async def fake_bcra(self, today=None):
+        from datetime import date
+        return {
+            "CER": MacroIndicatorCreate(date=date(2026, 11, 4), name="CER", value=Decimal("867.52"), source="BCRA"),
+            "TAMAR": MacroIndicatorCreate(date=date(2026, 11, 3), name="TAMAR", value=Decimal("24.0"), source="BCRA"),
+            "A3500": MacroIndicatorCreate(date=date(2026, 11, 4), name="A3500", value=Decimal("1548.49"), source="BCRA"),
+        }
+
+    monkeypatch.setattr(BymaClient, "fetch_bond_books_raw", fake_books_raw)
+    monkeypatch.setattr(BymaClient, "fetch_cauciones_raw", fake_cauciones)
+    monkeypatch.setattr(BymaClient, "fetch_market_time", fake_market_time)
+    monkeypatch.setattr(CompararBonosClient, "fetch_raw", fake_comparar)
+    monkeypatch.setattr(BcraClient, "fetch_latest", fake_bcra)
+
 
 @pytest.fixture(autouse=True)
 def offline_sources(request, monkeypatch):
@@ -100,6 +135,8 @@ def client():
     with pytest.MonkeyPatch.context() as mp:
         _install_offline_sources(mp)
         with TestClient(app) as test_client:
+            res = test_client.post("/api/v1/reference/refresh")
+            assert res.status_code == 200, res.text
             res = test_client.post("/api/v1/ingest")
             assert res.status_code == 200, res.text
             yield test_client

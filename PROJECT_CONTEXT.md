@@ -214,6 +214,8 @@ El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `
 * `DATABASE_URL`: Cadena de conexión SQLAlchemy (por defecto `sqlite:///./bonistas.db`, modo WAL).
 * `POLLING_INTERVAL_SECONDS`: Intervalo de sincronización en segundos (por defecto `60`).
 * `DISABLE_SCHEDULER` / `SKIP_STARTUP_INGESTION`: desactivan la ingesta automática (tests / desarrollo offline).
+* `MARKET_HOURS_ONLY` (`true`): consultar cotizaciones solo en días hábiles y en horario de rueda (según BYMA), hasta 25 min después del cierre.
+* `REFERENCE_REFRESH_HOUR` / `REFERENCE_REFRESH_MINUTE` (`10:15` ART): actualización diaria de CompararBonos + BCRA (L-V; también al iniciar si los datos no son del día).
 * `COMMISSION_PCT` (`0.11`), `MIN_NET_PROFIT_PCT` (`0.40`), `TRADE_SIZE_USD` (`500`): parámetros operativos por defecto.
 
 ---
@@ -235,3 +237,21 @@ El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `
 * **Infra**: SQLite en WAL, scheduler con `max_instances=1`, CORS restringido, `HOST` por defecto local, polling 60 s.
 * **Tests**: aislados de la base real y de internet; 83 tests (antes 29), ~5 s (antes ~60 s).
 * **Limpieza de datos** en `bonistas.db` (respaldo en `bonistas.backup-2026-11-04.db`): 13.248 snapshots con precio 0 y 4 indicadores macro ficticios eliminados.
+
+### Etapa 2 — Nuevas fuentes de datos (2026-11-04)
+
+| Fuente | Módulo | Qué aporta | Frecuencia |
+|---|---|---|---|
+| BYMA Open Data (`/public-bonds`, POST, sin token) | `data/byma_client.py` | Mejor punta compradora/vendedora con cantidades, último, volumen y hora; CI (`settlementType=1`) y 24hs (`2`); especies ARS / MEP (`USD`) / CCL (`EXT`). **20 min de demora.** | 60 s en horario |
+| BYMA cauciones | `data/byma_client.py` | Caución en pesos al plazo más corto → `macro_indicators.CAUCION_1D_TNA` (% TNA) | 60 s en horario |
+| BYMA `market-time` | `services/market_calendar.py` | Día hábil y horario de rueda (no hace falta calendario de feriados propio) | 1 vez por día |
+| CompararBonos (`/api/bonos`) | `data/comparar_bonos_client.py` | Flujos por 100 VN (CER ya ajustados), VT, pago final LECAP/BONCAP, especies → tabla `reference_bonds` | Diaria |
+| API BCRA v4.0 | `data/bcra_client.py` | CER (id 30, el de hoy, no los publicados a futuro), TAMAR (44, TNA), A3500 (5) | Diaria |
+
+* Nuevas tablas: `book_quotes` (puntas por fuente/especie/plazo, **solo se agrega una fila cuando algo cambia**) y `reference_bonds`.
+* Los snapshots de Bonistas también se guardan solo cuando cambian.
+* Valuación (`/calculator/valuation`) y flujos (`/bonds/{t}/cashflows`): cronograma propio verificado (AL/GD) o, si no hay, flujos de referencia de CompararBonos (LECAP, BONCAP, CER con TIR real, BOPREAL, tasa fija). Duales y dollar linked: 422 (no publican flujos proyectables). Plazo `CI`/`24HS` para la fecha de liquidación por defecto.
+* Endpoints nuevos: `GET /books`, `GET /status` (horario + salud de fuentes), `GET /reference/{ticker}`, `POST /reference/refresh`. `POST /ingest` ahora incluye BYMA.
+* **Bug corregido**: Bonistas publica variantes `_PUT` / `_TAM` (mismo instrumento, TIR bajo otro escenario); se fusionaban con el bono base y la TIR alternaba entre escenarios en cada ciclo (ej. BPOA8 9,3% ↔ 27,4%). Ahora se usa solo el escenario base.
+* Dashboard: indicador real de estado de mercado y salud de fuentes (antes decía "Rueda en Vivo" siempre); el encabezado muestra el mayorista A3500 (antes mostraba el oficial minorista con la etiqueta "mayorista").
+* Verificado con datos reales: TIR de S30N6 25,97%, T30A7 29,31%, TZX27 3,69% real, BPA7D 2,22% (iguales a las de referencia de mercado).

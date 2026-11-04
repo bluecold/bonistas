@@ -9,7 +9,10 @@ from sqlalchemy import (
     BigInteger,
     ForeignKey,
     Text,
-    Index
+    Index,
+    Float,
+    Boolean,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from backend.app.db.session import Base
@@ -108,3 +111,67 @@ class MacroIndicator(Base):
 
     def __repr__(self):
         return f"<MacroIndicator {self.name} on {self.date}: {self.value}>"
+
+
+class BookQuote(Base):
+    """
+    Mejor punta compradora / vendedora de una especie en un plazo, tal como la publica la
+    fuente (BYMA Open Data con 20 min de demora, o Bull Market en tiempo real).
+    Se guarda una fila nueva solo cuando algo cambió respecto de la anterior.
+    """
+    __tablename__ = "book_quotes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    source = Column(String(20), nullable=False)          # 'BYMA', 'BULLMARKET'
+    symbol = Column(String(20), nullable=False)          # especie: AL30, AL30D, AL30C
+    base_ticker = Column(String(20), nullable=False, index=True)  # AL30 para las tres especies
+    currency = Column(String(5), nullable=False)         # 'ARS', 'MEP', 'CCL'
+    settlement = Column(String(5), nullable=False)       # 'CI', '24HS'
+    bid = Column(Float, nullable=True)
+    bid_qty = Column(Float, nullable=True)
+    ask = Column(Float, nullable=True)
+    ask_qty = Column(Float, nullable=True)
+    last = Column(Float, nullable=True)
+    prev_close = Column(Float, nullable=True)
+    volume_nominal = Column(Float, nullable=True)
+    volume_amount = Column(Float, nullable=True)
+    trades = Column(Integer, nullable=True)
+    trade_time = Column(String(12), nullable=True)       # hora de la última operación según la fuente
+    maturity_date = Column(Date, nullable=True)
+
+    __table_args__ = (
+        Index("idx_book_symbol_settlement", "source", "symbol", "settlement", "id"),
+    )
+
+    def __repr__(self):
+        return f"<BookQuote {self.source} {self.symbol} {self.settlement}: {self.bid} / {self.ask}>"
+
+
+class ReferenceBond(Base):
+    """
+    Datos de referencia diarios por ticker base (CompararBonos): flujos futuros por 100 VN,
+    valor técnico, pago final, etc. Se reemplaza en cada actualización diaria.
+    """
+    __tablename__ = "reference_bonds"
+
+    ticker_base = Column(String(20), primary_key=True)
+    source = Column(String(30), nullable=False, default="COMPARARBONOS")
+    fetched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    market_date = Column(Date, nullable=True)            # rueda a la que corresponden los datos
+    settlement_date = Column(Date, nullable=True)        # liquidación que usa la fuente (24hs)
+    tipo = Column(String(30), nullable=True)
+    currency = Column(String(10), nullable=True)
+    flows = Column(JSON, nullable=False, default=list)   # [["2027-01-09", 8.24], ...]
+    technical_value = Column(Float, nullable=True)
+    residual_capital = Column(Float, nullable=True)
+    final_payment = Column(Float, nullable=True)
+    yield_is_real = Column(Boolean, default=False)
+    flows_cer_adjusted = Column(Boolean, default=False)
+    ref_ytm_pct = Column(Float, nullable=True)
+    ref_duration = Column(Float, nullable=True)
+    payment_structure = Column(String(200), nullable=True)
+    species = Column(JSON, nullable=False, default=list)
+
+    def __repr__(self):
+        return f"<ReferenceBond {self.ticker_base} ({self.tipo}) {len(self.flows or [])} flujos>"

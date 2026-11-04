@@ -23,9 +23,13 @@ class Settings(BaseSettings):
 
     # Parámetros de Ingesta
     POLLING_INTERVAL_SECONDS: int = 60
-    MARKET_OPEN_HOUR: int = 11  # 11:00 hs ART
-    MARKET_CLOSE_HOUR: int = 17  # 17:00 hs ART
+    # Consultar cotizaciones solo en días hábiles y en horario de rueda (según BYMA market-time),
+    # con 25 min extra después del cierre por la demora de 20 min de BYMA Open Data.
+    MARKET_HOURS_ONLY: bool = True
     TIMEZONE: str = "America/Argentina/Buenos_Aires"
+    # Hora (ART) de la actualización diaria de datos de referencia (CompararBonos + BCRA)
+    REFERENCE_REFRESH_HOUR: int = 10
+    REFERENCE_REFRESH_MINUTE: int = 15
     # Útiles para tests / desarrollo offline
     DISABLE_SCHEDULER: bool = False
     SKIP_STARTUP_INGESTION: bool = False

@@ -15,7 +15,7 @@ from backend.app.data.bonistas_client import BonistasClient
 from backend.app.data.dolar_api_client import DolarApiClient
 from backend.app.data.macro_connectors import MacroDataConnector
 from backend.app.schemas.snapshot import BondQuoteView
-from backend.app.schemas.macro import MacroIndicatorCreate
+from backend.app.services.source_health import source_health
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,9 @@ class IngestionService:
         self.bonistas = bonistas_client or BonistasClient()
         self.dolar_api = dolar_client or DolarApiClient()
         self.macro = macro_connector or MacroDataConnector()
+        # Último snapshot guardado por (ticker, plazo) para no repetir filas idénticas.
+        # Arranca vacía: tras un reinicio, el primer ciclo guarda una vez cada bono.
+        self._last_snapshot: Dict[tuple, tuple] = {}
 
     def seed_initial_bonds(self, db: Session) -> int:
         """Siembra el catálogo inicial de bonos si no están cargados."""
@@ -71,35 +74,37 @@ class IngestionService:
 
     async def ingest_market_data(self, db: Session) -> Dict[str, Any]:
         """
-        Ejecuta el ciclo de ingesta completo:
-        1. Cotizaciones de bonistas.com (bonds)
+        Ciclo de ingesta de analítica de bonos (cada minuto, en horario de mercado):
+        1. Cotizaciones y métricas de bonistas.com (TIR, MD, paridad, VT)
         2. Especies y tipos de cambio implícitos (fx)
         3. Dólares de referencia (DolarAPI)
-        4. Variables macro
+        Los indicadores macro (IPC, CER, TAMAR, A3500) se actualizan una vez por día en
+        ReferenceDataService. Solo se guarda un snapshot cuando cambió respecto del anterior.
         """
         # Aseguramos catálogo sembrado
         self.seed_initial_bonds(db)
 
         # 1. Obtener datos externos
         # La fuente de bonos es crítica: si falla, el ciclo falla.
-        bonds_data = await self.bonistas.fetch_bonds()
+        try:
+            bonds_data = await self.bonistas.fetch_bonds()
+        except Exception as e:
+            source_health.failure("BONISTAS", e)
+            raise
         # Las demás son complementarias: si fallan se registra y se sigue con lo disponible.
         warnings: List[str] = []
         fx_data: List[Dict[str, Any]] = []
         dolar_quotes: Dict[str, float] = {}
-        macro_data: Dict[str, MacroIndicatorCreate] = {}
         try:
             fx_data = await self.bonistas.fetch_fx()
         except Exception as e:
             warnings.append(f"FX bonistas no disponible: {e}")
         try:
             dolar_quotes = await self.dolar_api.get_rates_dict()
+            source_health.success("DOLARAPI", cotizaciones=len(dolar_quotes))
         except Exception as e:
+            source_health.failure("DOLARAPI", e)
             warnings.append(f"DolarAPI no disponible: {e}")
-        try:
-            macro_data = await self.macro.fetch_macro_snapshot()
-        except Exception as e:
-            warnings.append(f"Datos macro no disponibles: {e}")
         for w in warnings:
             logger.warning(w)
 
@@ -116,6 +121,8 @@ class IngestionService:
         now = datetime.now(timezone.utc)
         snapshots_created = 0
         skipped_without_price = 0
+        unchanged = 0
+        scenario_variants = 0
         bonds_by_ticker: Dict[str, Bond] = {b.ticker: b for b in db.execute(select(Bond)).scalars()}
 
         # Mapeo de tickers y normalización
@@ -129,8 +136,12 @@ class IngestionService:
             base_ticker = raw_ticker
             if base_ticker.endswith("_24hs") or base_ticker.endswith("_CI"):
                 base_ticker = base_ticker.split("_")[0]
+            # _PUT / _TAM son el MISMO instrumento con la TIR calculada bajo otro escenario
+            # (ejercicio del put, tasa TAMAR). Fusionarlos con el bono base hacía alternar la
+            # TIR entre escenarios en cada ciclo: se usa solo el escenario base.
             if base_ticker.endswith("_PUT") or base_ticker.endswith("_TAM"):
-                base_ticker = base_ticker.split("_")[0]
+                scenario_variants += 1
+                continue
 
             # Buscar si existe el bono en el maestro
             bond = bonds_by_ticker.get(base_ticker)
@@ -211,7 +222,14 @@ class IngestionService:
             vol = b_raw.get("volume")
             diff = b_raw.get("day_difference")
 
-            # Crear snapshot
+            # Solo se guarda si cambió algo respecto del último snapshot de ese bono y plazo
+            fingerprint = (last_price, price_ars, price_mep, price_ccl, tir, mod_dur, vol, parity)
+            cache_key = (bond.ticker, settlement)
+            if self._last_snapshot.get(cache_key) == fingerprint:
+                unchanged += 1
+                continue
+            self._last_snapshot[cache_key] = fingerprint
+
             snapshot = PriceSnapshot(
                 ticker=bond.ticker,
                 timestamp=now,
@@ -244,28 +262,20 @@ class IngestionService:
             else:
                 db.add(MacroIndicator(date=today, name=name, value=Decimal(str(v)), source="DolarAPI"))
 
-        for name, item in macro_data.items():
-            existing_macro = db.execute(
-                select(MacroIndicator).where(MacroIndicator.date == item.date, MacroIndicator.name == name)
-            ).scalar_one_or_none()
-            if existing_macro:
-                existing_macro.value = item.value
-                existing_macro.source = item.source
-            else:
-                db.add(MacroIndicator(date=item.date, name=name, value=item.value, source=item.source))
-
         db.commit()
         logger.info(
-            f"Ingesta finalizada: {snapshots_created} snapshots registrados, "
+            f"Ingesta finalizada: {snapshots_created} snapshots nuevos, {unchanged} sin cambios, "
             f"{skipped_without_price} filas sin precio descartadas."
         )
+        source_health.success("BONISTAS", snapshots=snapshots_created, unchanged=unchanged)
 
         return {
             "timestamp": now.isoformat(),
             "snapshots_created": snapshots_created,
             "skipped_without_price": skipped_without_price,
+            "unchanged": unchanged,
+            "scenario_variants_skipped": scenario_variants,
             "dolares": dolar_quotes,
-            "macro": {k: float(v.value) for k, v in macro_data.items()},
             "warnings": warnings,
         }
 

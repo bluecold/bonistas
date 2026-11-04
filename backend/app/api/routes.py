@@ -38,12 +38,19 @@ from backend.app.schemas.arbitrage import (
 )
 from backend.app.arbitrage.engine import ArbitrageEngine
 from backend.app.services.ingestion_service import IngestionService
-from backend.app.quant.cashflows import base_ticker, has_verified_schedule
+from backend.app.quant.cashflows import base_ticker, has_verified_schedule, CashFlowItem
+from backend.app.services.market_book_service import MarketBookService
+from backend.app.services.reference_data_service import ReferenceDataService
+from backend.app.services.market_calendar import MarketCalendar, next_business_day
+from backend.app.services.source_health import source_health
 from backend.app.config import settings
 
 router = APIRouter()
 ingestion_service = IngestionService()
 arbitrage_engine = ArbitrageEngine(ingestion_service)
+market_book_service = MarketBookService()
+reference_service = ReferenceDataService()
+market_calendar = MarketCalendar()
 
 @router.get("/health", tags=["Health"])
 def health_check():
@@ -103,16 +110,85 @@ def get_macro_indicators(db: Session = Depends(get_db)):
 
 @router.post("/ingest", tags=["Ingestion"])
 async def trigger_ingestion(db: Session = Depends(get_db)):
-    """Dispara una sincronización manual e inmediata de cotizaciones y tipos de cambio."""
+    """
+    Sincronización manual inmediata (ignora el horario de mercado): analítica de Bonistas,
+    dólares de referencia y libro de BYMA (puntas CI y 24hs) con la caución a 1 día.
+    """
+    details: Dict[str, Any] = {}
+    errors: List[str] = []
     try:
-        result = await ingestion_service.ingest_market_data(db)
-        return {
-            "status": "success",
-            "message": "Ingesta de mercado completada",
-            "details": result
-        }
+        details.update(await ingestion_service.ingest_market_data(db))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error durante la ingesta: {str(e)}")
+        errors.append(f"Bonistas: {e}")
+    byma = await market_book_service.ingest_byma(db)
+    details["byma"] = byma
+    if "books_error" in byma:
+        errors.append(f"BYMA: {byma['books_error']}")
+    if len(errors) == 2:
+        raise HTTPException(status_code=502, detail="; ".join(errors))
+    return {
+        "status": "success" if not errors else "partial",
+        "message": "Ingesta de mercado completada",
+        "errors": errors,
+        "details": details,
+    }
+
+
+@router.post("/reference/refresh", tags=["Ingestion"])
+async def trigger_reference_refresh(db: Session = Depends(get_db)):
+    """Actualiza ya los datos de referencia diarios (flujos de CompararBonos, CER/TAMAR/A3500 del BCRA, IPC)."""
+    return await reference_service.refresh(db)
+
+
+@router.get("/reference/{ticker}", tags=["Quant Analytics"])
+def get_reference_bond(ticker: str, db: Session = Depends(get_db)):
+    """Datos de referencia (CompararBonos) de un bono: flujos, VT, pago final, especies."""
+    ref = ReferenceDataService.get_reference(db, ticker)
+    if ref is None:
+        raise HTTPException(status_code=404, detail=f"Sin datos de referencia para '{ticker}'.")
+    return {
+        "ticker_base": ref.ticker_base, "tipo": ref.tipo, "currency": ref.currency,
+        "market_date": ref.market_date, "settlement_date": ref.settlement_date,
+        "technical_value": ref.technical_value, "residual_capital": ref.residual_capital,
+        "final_payment": ref.final_payment, "yield_is_real": ref.yield_is_real,
+        "flows_cer_adjusted": ref.flows_cer_adjusted, "ref_ytm_pct": ref.ref_ytm_pct,
+        "ref_duration": ref.ref_duration, "payment_structure": ref.payment_structure,
+        "species": ref.species, "flows": ref.flows, "fetched_at": ref.fetched_at,
+    }
+
+
+@router.get("/books", tags=["Market Data"])
+def get_books(
+    settlement: Optional[str] = Query(None, pattern="^(?i:CI|24HS)$", description="CI o 24HS (default: ambos)"),
+    base_ticker: Optional[str] = Query(None, description="Ticker base, ej: AL30 (trae AL30, AL30D y AL30C)"),
+    source: str = Query("BYMA", description="Fuente: BYMA (20 min de demora) o BULLMARKET"),
+    db: Session = Depends(get_db),
+):
+    """Últimas puntas compradora/vendedora por especie y plazo."""
+    rows = market_book_service.latest_books(db, source=source.upper(), settlement=settlement,
+                                             base_ticker=base_ticker)
+    return [
+        {
+            "symbol": r.symbol, "base_ticker": r.base_ticker, "currency": r.currency,
+            "settlement": r.settlement, "bid": r.bid, "bid_qty": r.bid_qty, "ask": r.ask,
+            "ask_qty": r.ask_qty, "last": r.last, "prev_close": r.prev_close,
+            "volume_nominal": r.volume_nominal, "trades": r.trades, "trade_time": r.trade_time,
+            "maturity_date": r.maturity_date, "timestamp": r.timestamp, "source": r.source,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/status", tags=["Health"])
+async def get_status():
+    """Estado de las fuentes de datos y del horario de mercado (para el dashboard)."""
+    window = await market_calendar.today()
+    return {
+        "market": window.to_dict(),
+        "market_hours_only": settings.MARKET_HOURS_ONLY,
+        "polling_interval_seconds": settings.POLLING_INTERVAL_SECONDS,
+        "sources": source_health.snapshot(),
+    }
 
 # ==========================================
 # ENDPOINTS CUANTITATIVOS (FASE 2)
@@ -127,23 +203,6 @@ def _find_bond(db: Session, ticker: str) -> Optional[Bond]:
     return bond
 
 
-def _require_verified_schedule(bond: Bond) -> None:
-    """
-    La valuación propia solo es confiable para bonos con cronograma verificado.
-    Para LECAP/BONCAP (capitalizables), CER, duales, dollar linked, etc. el modelo genérico
-    daría números incorrectos, así que se rechaza explícitamente en lugar de inventarlos.
-    """
-    if not has_verified_schedule(bond.ticker):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Valuación propia aún no disponible para {bond.ticker} ({bond.bond_type}). "
-                "Por ahora solo se soportan Bonares y Globales 2020 (AL/AE/GD); el resto se "
-                "incorporará con los flujos de CompararBonos."
-            ),
-        )
-
-
 def _latest_snapshot(db: Session, ticker: str, settlement: str = "24HS") -> Optional[PriceSnapshot]:
     """Último snapshot de un ticker en un plazo de liquidación concreto (CI o 24HS)."""
     return db.execute(
@@ -153,68 +212,126 @@ def _latest_snapshot(db: Session, ticker: str, settlement: str = "24HS") -> Opti
     ).scalars().first()
 
 
+def _resolve_settlement_date(settlement_date: Optional[date], settlement_type: str) -> date:
+    """Fecha de liquidación: la indicada, o hoy (CI) / próximo día hábil (24HS)."""
+    if settlement_date:
+        return settlement_date
+    today = date.today()
+    return today if settlement_type.upper() == "CI" else next_business_day(today)
+
+
+def _cashflow_source(db: Session, ticker: str):
+    """
+    Decide de dónde salen los flujos de un bono:
+    1. Cronograma propio verificado (Bonares / Globales 2020).
+    2. Flujos de referencia diarios de CompararBonos (LECAP, BONCAP, CER, BOPREAL, tasa fija...).
+    Devuelve (bond o None, reference o None). Lanza 404/422 si no hay ninguna fuente válida.
+    """
+    bond = _find_bond(db, ticker)
+    if bond is not None and has_verified_schedule(bond.ticker):
+        return bond, None
+    ref = ReferenceDataService.get_reference(db, ticker)
+    if ref is not None and ref.flows:
+        return bond, ref
+    if bond is None and ref is None:
+        raise HTTPException(status_code=404, detail=f"Bono '{ticker}' no encontrado.")
+    detail = f"Sin flujos disponibles para {ticker.upper()}"
+    if ref is not None and ref.payment_structure:
+        detail += f" (estructura: {ref.payment_structure})"
+    detail += ". Duales, dollar linked y algunos CER/provinciales no publican flujos proyectables."
+    raise HTTPException(status_code=422, detail=detail)
+
+
+def _reference_cashflows(ref, s_date: date) -> List[CashFlowItem]:
+    flows = [(d, amt) for d, amt in ReferenceDataService.flows_of(ref) if d > s_date]
+    return [
+        CashFlowItem(
+            date=d, days_from_settlement=(d - s_date).days, interest_rate=0.0,
+            coupon_amount=0.0, amortization_amount=0.0, total_cashflow=amt, residual_capital=0.0,
+        )
+        for d, amt in flows
+    ]
+
+
 @router.get("/bonds/{ticker}/cashflows", response_model=List[CashFlowItemResponse], tags=["Quant Analytics"])
 def get_bond_cashflows(
     ticker: str,
-    settlement_date: Optional[date] = Query(None, description="Fecha de liquidación (default: hoy)"),
+    settlement_date: Optional[date] = Query(None, description="Fecha de liquidación (default: próximo día hábil)"),
     db: Session = Depends(get_db)
 ):
-    """Obtiene el vector cronológico completo de flujos de fondos futuros del bono."""
-    bond = _find_bond(db, ticker)
-    if not bond:
-        raise HTTPException(status_code=404, detail=f"Bono '{ticker}' no encontrado en el maestro.")
-    _require_verified_schedule(bond)
+    """
+    Flujos de fondos futuros por 100 VN. Para Bonares/Globales se detalla renta, amortización y
+    residual; para el resto (fuente CompararBonos) solo se conoce el flujo total de cada fecha.
+    """
+    bond, ref = _cashflow_source(db, ticker)
+    s_date = _resolve_settlement_date(settlement_date, "24HS")
 
-    s_date = settlement_date or date.today()
-    cfs = generate_cashflows(bond.ticker, s_date, bond.maturity_date)
+    if ref is None:
+        return [
+            CashFlowItemResponse(
+                date=cf.date, days_from_settlement=cf.days_from_settlement,
+                interest_rate=cf.interest_rate, coupon_amount=cf.coupon_amount,
+                amortization_amount=cf.amortization_amount, total_cashflow=cf.total_cashflow,
+                residual_capital=cf.residual_capital, source="PROPIO",
+            )
+            for cf in generate_cashflows(bond.ticker, s_date, bond.maturity_date)
+        ]
 
     return [
         CashFlowItemResponse(
-            date=cf.date,
-            days_from_settlement=cf.days_from_settlement,
-            interest_rate=cf.interest_rate,
-            coupon_amount=cf.coupon_amount,
-            amortization_amount=cf.amortization_amount,
-            total_cashflow=cf.total_cashflow,
-            residual_capital=cf.residual_capital
+            date=cf.date, days_from_settlement=cf.days_from_settlement,
+            interest_rate=None, coupon_amount=None, amortization_amount=None,
+            total_cashflow=cf.total_cashflow, residual_capital=None, source="COMPARARBONOS",
         )
-        for cf in cfs
+        for cf in _reference_cashflows(ref, s_date)
     ]
+
 
 @router.post("/calculator/valuation", response_model=ValuationResponse, tags=["Quant Analytics"])
 def calculate_bond_valuation(
     request: ValuationRequest,
     db: Session = Depends(get_db)
 ):
-    """Calcula Valor Técnico, Paridad, TIR/YTM (Newton-Raphson), Duration y TEM para un precio dado."""
-    bond = _find_bond(db, request.ticker)
-    if not bond:
-        raise HTTPException(status_code=404, detail=f"Bono '{request.ticker}' no encontrado.")
-    _require_verified_schedule(bond)
-    clean_ticker = bond.ticker
+    """
+    TIR, TEM, TNA, Duration y (cuando se conoce) Valor Técnico y Paridad para un precio dado.
+    El precio es el precio de mercado (sucio) por 100 VN, en la moneda de los flujos.
+    """
+    bond, ref = _cashflow_source(db, request.ticker)
+    s_date = _resolve_settlement_date(request.settlement_date, request.settlement)
 
-    s_date = request.settlement_date or date.today()
+    res_cap = accrued = vt = parity = None
+    yield_is_real = False
+    if ref is None:
+        ticker = bond.ticker
+        source = "PROPIO"
+        res_cap = calculate_residual_capital(ticker, s_date)
+        accrued = calculate_accrued_interest(ticker, s_date)
+        vt = calculate_technical_value(res_cap, accrued)
+        cfs = generate_cashflows(ticker, s_date, bond.maturity_date)
+    else:
+        ticker = ref.ticker_base
+        source = "COMPARARBONOS"
+        yield_is_real = bool(ref.yield_is_real)
+        res_cap = ref.residual_capital
+        # El VT de referencia vale para la liquidación de la rueda de la fuente
+        if ref.technical_value and ref.settlement_date == s_date:
+            vt = ref.technical_value
+        cfs = _reference_cashflows(ref, s_date)
+        if not cfs:
+            raise HTTPException(status_code=422, detail=f"{ticker} no tiene flujos posteriores a {s_date}.")
 
-    res_cap = calculate_residual_capital(clean_ticker, s_date)
-    accrued = calculate_accrued_interest(clean_ticker, s_date)
-    vt = calculate_technical_value(res_cap, accrued)
-    parity = calculate_parity(request.price, vt)
+    if vt:
+        parity = calculate_parity(request.price, vt)
 
-    cfs = generate_cashflows(clean_ticker, s_date, bond.maturity_date)
     ytm = calculate_ytm(request.price, cfs)
-
-    tem = None
-    tna = None
-    d_mac = None
-    md = None
-
+    tem = tna = d_mac = md = None
     if ytm is not None:
         tem = calculate_tem(ytm)
         tna = calculate_tna(tem)
         d_mac, md = calculate_duration_and_md(request.price, ytm, cfs)
 
     return ValuationResponse(
-        ticker=clean_ticker,
+        ticker=ticker,
         price=request.price,
         settlement_date=s_date,
         residual_capital=res_cap,
@@ -225,7 +342,9 @@ def calculate_bond_valuation(
         tem_percentage=round(tem * 100.0, 4) if tem is not None else None,
         tna_percentage=round(tna * 100.0, 4) if tna is not None else None,
         macaulay_duration=d_mac,
-        modified_duration=md
+        modified_duration=md,
+        source=source,
+        yield_is_real=yield_is_real,
     )
 
 @router.get("/arbitrage/breakeven", response_model=BreakevenResponse, tags=["Quant Analytics"])

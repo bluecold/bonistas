@@ -1,0 +1,85 @@
+"""
+Calendario de mercado: decide si corresponde consultar fuentes de cotizaciones.
+
+Usa el endpoint `market-time` de BYMA (informa si hoy es día hábil y el horario de rueda),
+consultado una vez por día. Si BYMA no responde, se asume lunes a viernes 10:30–17:00.
+La ventana de consulta se extiende `delay_minutes` después del cierre porque BYMA Open Data
+publica con 20 minutos de demora.
+"""
+
+import logging
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
+from typing import Optional
+from zoneinfo import ZoneInfo
+
+from backend.app.config import settings
+from backend.app.data.byma_client import BymaClient, MarketTime
+
+logger = logging.getLogger(__name__)
+
+ART = ZoneInfo(settings.TIMEZONE)
+DEFAULT_OPEN = time(10, 30)
+DEFAULT_CLOSE = time(17, 0)
+
+
+@dataclass
+class MarketWindow:
+    day: date
+    is_working_day: bool
+    opening: time
+    closing: time
+    source: str  # 'BYMA' o 'FALLBACK'
+
+    def is_open_for_polling(self, now: datetime, lead_minutes: int = 5, delay_minutes: int = 25) -> bool:
+        if not self.is_working_day:
+            return False
+        local = now.astimezone(ART)
+        start = datetime.combine(self.day, self.opening, ART) - timedelta(minutes=lead_minutes)
+        end = datetime.combine(self.day, self.closing, ART) + timedelta(minutes=delay_minutes)
+        return start <= local <= end
+
+    def to_dict(self, now: Optional[datetime] = None) -> dict:
+        now = now or datetime.now(ART)
+        return {
+            "date": self.day.isoformat(),
+            "is_working_day": self.is_working_day,
+            "opening": self.opening.strftime("%H:%M"),
+            "closing": self.closing.strftime("%H:%M"),
+            "source": self.source,
+            "polling_active": self.is_open_for_polling(now),
+        }
+
+
+def next_business_day(d: date) -> date:
+    """Siguiente día hábil (solo saltea fines de semana; los feriados los informa BYMA día a día)."""
+    nxt = d + timedelta(days=1)
+    while nxt.weekday() >= 5:
+        nxt += timedelta(days=1)
+    return nxt
+
+
+class MarketCalendar:
+    def __init__(self, byma: Optional[BymaClient] = None):
+        self.byma = byma or BymaClient()
+        self._cached: Optional[MarketWindow] = None
+
+    async def today(self, now: Optional[datetime] = None) -> MarketWindow:
+        now = now or datetime.now(ART)
+        today = now.astimezone(ART).date()
+        if self._cached and self._cached.day == today and self._cached.source == "BYMA":
+            return self._cached
+        try:
+            mt: MarketTime = await self.byma.fetch_market_time()
+            window = MarketWindow(today, mt.is_working_day, mt.opening, mt.closing, "BYMA")
+        except Exception as e:
+            logger.warning(f"No se pudo consultar el horario de BYMA, se asume L-V 10:30-17:00: {e}")
+            window = MarketWindow(today, today.weekday() < 5, DEFAULT_OPEN, DEFAULT_CLOSE, "FALLBACK")
+        self._cached = window
+        return window
+
+    async def should_poll(self, now: Optional[datetime] = None) -> bool:
+        if not settings.MARKET_HOURS_ONLY:
+            return True
+        now = now or datetime.now(ART)
+        return (await self.today(now)).is_open_for_polling(now)
