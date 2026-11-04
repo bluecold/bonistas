@@ -1,0 +1,213 @@
+# 🧠 Contexto Técnico y Memoria de Proyecto: Sistema de Trading y Arbitraje de Bonos Argentinos
+
+> **Documento de Memoria y Contexto para Agentes de IA y Desarrolladores.**  
+> Este archivo resume el propósito del proyecto, el estado actual de la implementación, las decisiones de diseño arquitectónicas y cuantitativas, las particularidades del mercado financiero argentino y la hoja de ruta para futuras ampliaciones.
+
+---
+
+## 1. Visión General del Proyecto
+
+### 1.1 Objetivo
+Desarrollar una plataforma cuantitativa en tiempo real para el mercado de capitales argentino, cuyo propósito es:
+1. **Monitorear** cotizaciones, precios de liquidación (CI y 24hs), paridades y rendimientos de títulos públicos soberanos y subsoberanos.
+2. **Valuar con precisión matemática profesional** títulos con flujos complejos (amortizaciones semestrales escalonadas, cupones step-up, capitalizables y ajustes por CER).
+3. **Detectar y catalogar automáticamente oportunidades de arbitraje y valor relativo** entre diferentes curvas, legislaciones (Local vs. Nueva York), tasas fijas vs. reales y opciones implícitas de cobertura.
+4. **Proporcionar un Command Center interactivo** con semáforos bursátiles y un simulador de rotación de cartera (*swaps*) con deducción de comisiones operativas.
+
+---
+
+## 2. Estado de Implementación (Lo que se hizo)
+
+El desarrollo se ejecutó y validó al 100% en cuatro fases consecutivas:
+
+### Fase 1: Arquitectura Base, Modelos y Pipeline de Ingesta
+* **Entorno Virtual**: Python 3.13 en `.venv` con dependencias científicas (`fastapi`, `uvicorn`, `sqlalchemy 2.0`, `pydantic v2`, `httpx`, `scipy`, `numpy`, `pandas`, `apscheduler`, `pytest`).
+* **Base de Datos Relacional**: Modelos en `backend/app/db/models.py` (`bonds`, `price_snapshots`, `arbitrage_signals`, `macro_indicators`).
+* **Catálogo Maestro**: `backend/app/data/bond_catalog.py` sembrado con más de 20 activos representativos (Globales GD, Bonares AL, LECAPs/BONCAPs, BONCER, Duales, BOPREAL, Dólar Linked).
+* **Conectores de Datos**:
+  * `BonistasClient`: Conexión directa y resiliente con los endpoints internos JSON de `bonistas.com` (`/api/bonds`, `/api/fx/fx`, `/api/curves`).
+  * `DolarApiClient`: Tipos de cambio en tiempo real vía `dolarapi.com` (Oficial, Bolsa/MEP, CCL, Mayorista A3500, Blue).
+  * `MacroDataConnector`: Variables macroeconómicas (inflación IPC, CER, TAMAR).
+* **Ingesta & Polling**: `IngestionService` orquestado con `APScheduler` ejecutando tareas en segundo plano cada 30 segundos.
+
+### Fase 2: Motor Financiero Cuantitativo
+* **Flujos de Fondos Reales (`backend/app/quant/cashflows.py`)**:
+  * Modelado de las indenturas oficiales de la reestructuración 2020:
+    * **AL30 / GD30**: Cupones step-up semestrales (9 ene y 9 jul) y amortizaciones escalonadas (4% jul-24, 4% ene-25, 8% jul-25, 8% ene-26, 12% jul-26, etc.).
+    * **AL29 / GD29**: 10 cuotas semestrales iguales del 10% desde enero 2025.
+    * **AL35 / GD35, AE38 / GD38, AL41 / GD41, GD46**, títulos Bullet y letras capitalizables.
+* **Métricas de Renta Fija (`backend/app/quant/fixed_income.py`)**:
+  * Intereses corridos devengados bajo convención **Actual/365** sobre capital residual vigente.
+  * Capital residual exacto y Valor Técnico ($VT = \text{Residual} + \text{Intereses Corridos}$).
+  * Paridad porcentual exacta ($P / VT \times 100$).
+  * **Solucionador numérico de TIR / YTM**: Algoritmo analítico **Newton-Raphson** con gradiente exacto y fallback robusto a **Brentq (`scipy.optimize`)**.
+  * Sensibilidad: Duración de Macaulay y **Modified Duration (MD)**.
+  * Tasas equivalentes: Tasa Efectiva Mensual ($\text{TEM}$) y Tasa Nominal Anual ($\text{TNA}$).
+* **Métricas de Arbitraje (`backend/app/quant/arbitrage_math.py`)**:
+  * Tipos de cambio implícitos (MEP, CCL y Canje $C/D$).
+  * Ecuación Fisher de Breakeven inflacionario mensual y anual entre tasa fija y CER.
+  * Z-scores normalizados sobre ventanas históricas.
+
+### Fase 3: Motor Algorítmico de Arbitrajes
+* Implementación de las cuatro estrategias en `backend/app/arbitrage/strategies.py`:
+  1. **Spread de Legislación (AL vs. GD)**:
+     * Regla A (Ratio $\le 1.01$ o $\Delta \text{TIR} \le 20\text{ bps}$): `ROTAR_A_NY` (Free legal hedge).
+     * Regla B (Ratio $\ge 1.12$ o $Z \ge +1.5\sigma$): `ROTAR_A_ARG` (Captura de brecha anormal).
+  2. **Relative Value Tramo Corto (GD29 vs. AL30)**:
+     * Señal `SWAP_DURACION` cuando $\text{TIR}_{AL30} - \text{TIR}_{GD29} \ge 130\text{ bps}$ ($Z \ge +1.1\sigma$).
+  3. **Breakeven de Inflación (LECAPs vs. BONCER)**:
+     * Comparación contra expectativa mensual de inflación (IPC/REM): `COMPRAR_CER` o `COMPRAR_TASA_FIJA`.
+  4. **Cobertura con Bonos Duales (TAMAR vs. CER)**:
+     * Detección de bonos duales subvaluados (paridad $\le 96\%$) con señal `COMPRAR_DUAL`.
+* `ArbitrageEngine` (`backend/app/arbitrage/engine.py`): Concilia señales vivas, marca señales obsoletas como `EXPIRED`, persiste las activas en `arbitrage_signals` y genera el Command Center con semáforos bursátiles (Verde / Amarillo / Rojo).
+
+### Fase 4: Dashboard Web, Simulador de Swaps & Resiliencia Offline
+* **Dashboard SPA (`backend/app/static/index.html`)**:
+  * Interfaz profesional bajo la skill `frontend-design` con estética oscura de terminal financiero (*Bloomberg / TradingView*), tipografía dual (*Plus Jakarta Sans* y *JetBrains Mono* con `tabular-nums`).
+  * Pestañas: Monitor de Mercado con filtros y ordenamiento de columnas, Curvas de Rendimiento interactivas con Plotly y tooltips detallados, Arbitrage Command Center con semáforos, y Simulador de Swaps reactivo.
+  * Modal interactivo para inspección del cronograma de flujos de fondos futuros (renta, amortización y flujo total).
+  * Montado estáticamente en FastAPI (`/` y `/static`), requiriendo un único proceso para backend + frontend en el puerto `8050`.
+* **Resiliencia Local y Zero-CDN Dependency**:
+  * Para mitigar fallas de resolución DNS en ISPs locales (como caídas o bloqueos de `cdn.tailwindcss.com` que disparaban `ReferenceError: tailwind is not defined`), los assets esenciales (`tailwind.js` Play v3.4.17, `plotly.min.js` v2.35.2 y `lucide.min.js` v1.68.0) se alojan y sirven directamente desde `backend/app/static/vendor/`.
+  * La configuración JavaScript y llamadas a librerías cuentan con comprobaciones condicionales (`if (typeof tailwind !== 'undefined')`, `renderIcons()`, `Plotly check`), y el bloque `<style>` incorpora variables CSS fallback para renderizado garantizado.
+* **Simulador de Swaps (`backend/app/quant/swap_calculator.py`)**:
+  * Endpoint `POST /api/v1/calculator/swap` y cálculo interactivo en vivo con nominales adquiridos, aranceles BYMA (0.04%), comisiones de broker (0.5%), ganancia/pérdida de TIR, efectivo resultante y breakeven temporal.
+* **Suite de Pruebas**: 29 tests unitarios y de integración pasando al 100% (`backend/tests/`).
+
+---
+
+## 3. Decisiones Técnicas y Arquitectónicas Clave
+
+1. **Stack Unificado Monolítico Liviano (FastAPI + SPA)**:
+   * En lugar de obligar al usuario a correr dos procesos separados (Vite en un puerto y FastAPI en otro), FastAPI monta la SPA directamente en `/` y `/static`. Al ejecutar `python -m backend.main`, todo el sistema queda 100% operativo en una sola URL.
+2. **Puerto por Defecto: `8050`**:
+   * Se configuró el puerto `8050` (configurable mediante la variable de entorno `PORT`) para evitar colisiones con el puerto `8000`, frecuentemente utilizado por otros entornos de desarrollo.
+3. **Consumo de APIs Internas de Bonistas.com**:
+   * Se descubrió que Bonistas.com corre sobre Next.js y expone endpoints JSON (`/api/bonds`, `/api/fx/fx`, `/api/curves`). Se aprovechan estos endpoints directamente en lugar de recurrir a web scraping por HTML, otorgando velocidad y estabilidad ante cambios de diseño.
+4. **Tratamiento de Claves Primarias en SQLite vs PostgreSQL**:
+   * En SQLAlchemy con SQLite, las claves primarias autoincrementales deben ser declaradas como `Integer` (y no `BigInteger`) para que SQLite las enlace con el `ROWID` automático. Se corrigió esto en `models.py`.
+5. **Cálculo de TIR Híbrido (Newton-Raphson + Brentq)**:
+   * Newton-Raphson provee convergencia cuadrática instantánea ($< 5$ iteraciones) con su derivada analítica. Si el precio de mercado sufre una anomalía temporal o la tasa diverge, el fallback a `scipy.optimize.brentq` garantiza encontrar la raíz en el intervalo $[-0.80, 5.0]$ sin fallar.
+
+---
+
+## 4. Estructura de Archivos del Proyecto
+
+```
+bonistas/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   └── routes.py              # Endpoints REST (Health, Bonds, Quotes, Quant, Arbitrage, Swaps)
+│   │   ├── arbitrage/
+│   │   │   ├── __init__.py
+│   │   │   ├── engine.py              # Motor algorítmico y Command Center con semáforos
+│   │   │   └── strategies.py          # Las 4 estrategias de arbitraje formalizadas
+│   │   ├── data/
+│   │   │   ├── __init__.py
+│   │   │   ├── bond_catalog.py        # Maestro de bonos y letras argentinas
+│   │   │   ├── bonistas_client.py     # Cliente HTTP hacia Bonistas.com
+│   │   │   ├── dolar_api_client.py    # Cliente HTTP hacia DolarAPI
+│   │   │   └── macro_connectors.py    # Cliente HTTP para IPC / CER / TAMAR
+│   │   ├── db/
+│   │   │   ├── __init__.py
+│   │   │   ├── models.py              # Modelos SQLAlchemy (Bond, PriceSnapshot, ArbitrageSignal, MacroIndicator)
+│   │   │   └── session.py             # Configuración de Engine y SessionLocal
+│   │   ├── quant/
+│   │   │   ├── __init__.py
+│   │   │   ├── cashflows.py           # Vectores de flujos y cronogramas oficiales 2020
+│   │   │   ├── fixed_income.py        # Valor Técnico, Paridad, TIR (Newton-Raphson/Brent), Duration, TEM, TNA
+│   │   │   ├── arbitrage_math.py      # Ecuación Fisher (Breakeven), tipos de cambio implícitos, Z-score
+│   │   │   └── swap_calculator.py     # Simulador de rotación de activos con comisiones BYMA y broker
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   ├── bond.py                # Esquemas Pydantic para bonos
+│   │   │   ├── snapshot.py            # Esquemas para snapshots y cotizaciones
+│   │   │   ├── arbitrage.py           # Esquemas para señales de arbitraje
+│   │   │   ├── macro.py               # Esquemas para tipos de cambio e IPC
+│   │   │   └── valuation.py           # Esquemas para valuación cuantitativa y swaps
+│   │   ├── static/
+│   │   │   └── index.html             # Dashboard Web SPA interactivo (Plotly + TailwindCSS)
+│   │   └── config.py                  # Variables de entorno y configuración general (Host, Puerto, URLs)
+│   ├── tests/
+│   │   ├── fixtures/                  # Muestras JSON de prueba offline
+│   │   ├── test_api.py                # 11 tests de endpoints REST y servidor
+│   │   ├── test_arbitrage.py          # 7 tests de las estrategias y motor de arbitraje
+│   │   ├── test_ingestion.py          # 3 tests de la ingesta y persistencia
+│   │   └── test_quant.py              # 8 tests de precisión financiera y resolución numérica
+│   └── main.py                        # Punto de entrada FastAPI con lifespan y scheduler
+├── .venv/                             # Entorno virtual Python 3.13
+├── bonistas.db                        # Base de datos SQLite local pre-poblada con cotizaciones
+├── especificacion-sistema-trading-bonos-argentinos.md # Documento de especificación de requerimientos v1.0
+├── pytest.ini                         # Configuración de PyTest con pythonpath y asyncio
+├── requirements.txt                   # Dependencias Python
+├── README.md                          # Manual de usuario y ejecución
+└── PROJECT_CONTEXT.md                 # Este documento de memoria técnica
+```
+
+---
+
+## 5. Particularidades del Mercado Argentino Incorporadas
+
+1. **Especies de Negociación**:
+   * Cada título soberano cotiza simultáneamente en **Pesos** (ej. `AL30`), **Dólar MEP** (especie `AL30D`) y **Dólar Cable / CCL** (especie `AL30C`).
+   * El sistema calcula y monitorea el arbitraje cambiario implícito y el spread de canje ($CCL / MEP - 1$).
+2. **Ley Nueva York vs. Ley Local (*Law Premium*)**:
+   * Los Bonares (AL) y Globales (GD) comparten el mismo cronograma de pagos, pero difieren en su jurisdicción legal. El spread de legislación fluctúa históricamente entre 2% y 15%. Cuando colapsa a $\le 1\%$, el sistema recomienda rotar a NY; cuando se ensancha a $\ge 12\%$, recomienda capturar la brecha rotando a AL.
+3. **Amortizaciones Acumuladas en 2026**:
+   * Títulos como AL30 y GD30 comenzaron a amortizar en julio de 2024. Hacia finales de 2026, el capital residual es de $64.00$ por cada 100 de valor nominal original. Todas las fórmulas de Valor Técnico y Paridad descuentan estrictamente las amortizaciones pasadas.
+4. **Curvas de Tasa Fija vs. Curva CER**:
+   * El sistema calcula en tiempo real la tasa mensual de equilibrio ($Breakeven_{\text{TEM}}$). Si la inflación esperada del REM/INDEC supera este breakeven, el algoritmo instruye comprar bonos ajustados por CER; de lo contrario, recomienda fijar tasa en LECAPs/BONCAPs.
+
+---
+
+## 6. Lo que Falta / Oportunidades para Próximas Versiones (v1.1+)
+
+Si otro agente o desarrollador toma este proyecto, los siguientes puntos representan las extensiones naturales de mayor valor:
+
+1. **WebSockets o Server-Sent Events (SSE)**:
+   * En lugar del polling cada 15 segundos que realiza la SPA, implementar un canal WebSocket en FastAPI para emitir cotizaciones y señales con latencia cero a la UI.
+2. **Alertas Externas Automatizadas (Telegram / Discord / WhatsApp)**:
+   * Crear un conector de notificaciones para que cuando `ArbitrageEngine` emita una señal `ACTIVE` (ej. Rotar a NY por ratio $\le 1.01$), se despache una alerta push a un canal de traders.
+3. **Ampliación a Obligaciones Negociables (ONs Corporativas)**:
+   * Incorporar títulos corporativos hard dollar (YPF, Pampa Energía, Telecom, Vista) comparando sus curvas de rendimiento contra los soberanos para detectar arbitrajes de crédito privado.
+4. **Calibración de Z-Scores con Series Históricas Extensas**:
+   * Actualmente las medias y desvíos ($\mu, \sigma$) usan calibraciones estándar de mercado (5.5% para el law spread ratio, 180 bps para AL30 vs GD29). Conforme la base de datos acumule semanas de ruedas bursátiles en `price_snapshots`, se puede computar la media móvil rodante de 252 ruedas directamente desde SQL.
+5. **Integración con APIs de Brokers Locales (Order Execution)**:
+   * Conectar con APIs de brokers argentinos (ej. InvertirOnline, Balanz, PPI o interfaces FIX de BYMA) para permitir no solo la simulación del swap, sino la colocación con un solo clic de órdenes límite simultáneas para las dos patas del arbitraje.
+
+### 6.1 Backlog acordado con el usuario para una versión futura (fuera del alcance de v1.1)
+
+> Decisión del 2026-11-04: **la v1.1 se concentra exclusivamente en BONOS** (soberanos, subsoberanos, BCRA/BOPREAL, LECAP/BONCAP, CER, duales). Lo siguiente queda para después:
+
+1. **Acciones Merval y Panel General**: arbitraje CI vs 24hs con las mismas reglas de puntas, costo (0,11% por operación) y ganancia neta mínima.
+2. **CEDEARs**: arbitraje CI vs 24hs y, eventualmente, CCL implícito CEDEAR vs subyacente.
+3. **Obligaciones Negociables (ONs)**: curvas corporativas vs soberanos (ver punto 3 de arriba).
+4. **"Gangas"**: detector de caídas > 5% con volumen mínimo (> 4 operaciones), tal como hacía `temporal/MonitorMercado.ps1` (`Show-Gangas`).
+5. Notificaciones por canales externos (Telegram, etc.): en v1.1 los avisos son solo **notificación de Windows + dashboard**.
+
+El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `index=merval`, `panel+general` y `cedears`, así que el conector de v1.1 debería quedar parametrizable por índice para reutilizarlo.
+
+---
+
+## 7. Instrucciones Operativas
+
+### Ejecución del Servidor
+```powershell
+.\.venv\Scripts\python.exe -m backend.main
+```
+* **Dashboard**: `http://localhost:8050`
+* **Swagger Docs**: `http://localhost:8050/docs`
+
+### Ejecución de Pruebas
+```powershell
+.\.venv\Scripts\pytest.exe backend/tests/ -v
+```
+
+### Configuración vía Variables de Entorno
+* `PORT`: Puerto HTTP (por defecto `8050`).
+* `HOST`: Dirección de escucha (por defecto `0.0.0.0`).
+* `DATABASE_URL`: Cadena de conexión SQLAlchemy (por defecto `sqlite:///./bonistas.db`).
+* `POLLING_INTERVAL_SECONDS`: Intervalo de sincronización en segundos (por defecto `30`).
+

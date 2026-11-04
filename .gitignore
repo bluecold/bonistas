@@ -1,0 +1,17 @@
+# Entorno y caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Datos locales (base SQLite y journal)
+*.db
+*.db-journal
+
+# Secretos y configuración local (cookies de sesión de Bull Market, etc.)
+.env
+.env.*
+secrets/
+
+# Material personal / de trabajo (contiene cookies de sesión)
+temporal/
