@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Consultar cotizaciones solo en días hábiles y en horario de rueda (según BYMA market-time),
     # con 25 min extra después del cierre por la demora de 20 min de BYMA Open Data.
     MARKET_HOURS_ONLY: bool = True
+    # Horario de renta fija y caución (BYMA). Desde que EE.UU. pasó a 11:30–18:00 (hora AR),
+    # acciones y CEDEARs operan 10:30–18:00, pero bonos y caución siguen 10:30–17:00.
+    FIXED_INCOME_OPEN: str = "10:30"
+    FIXED_INCOME_CLOSE: str = "17:00"
     TIMEZONE: str = "America/Argentina/Buenos_Aires"
     # Hora (ART) de la actualización diaria de datos de referencia (CompararBonos + BCRA)
     REFERENCE_REFRESH_HOUR: int = 10

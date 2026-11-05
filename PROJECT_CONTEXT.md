@@ -166,7 +166,7 @@ El endpoint de Bull Market `GetStockPrices` acepta `index=merval`, `panel+genera
 ### Variables de entorno (o `.env`, no versionado)
 * `PORT` (`8050`), `HOST` (`127.0.0.1`; `0.0.0.0` para la red local), `RELOAD` (`false`).
 * `DATABASE_URL` (`sqlite:///./bonistas.db`, WAL).
-* `POLLING_INTERVAL_SECONDS` (`60`), `MARKET_HOURS_ONLY` (`true`: días hábiles y horario de rueda según BYMA, +25 min por la demora).
+* `POLLING_INTERVAL_SECONDS` (`60`), `MARKET_HOURS_ONLY` (`true`: días hábiles y horario de rueda según BYMA, +25 min por la demora), `FIXED_INCOME_OPEN`/`FIXED_INCOME_CLOSE` (`10:30`/`17:00`: horario de renta fija y caución; acota el de BYMA porque, cuando EE.UU. cambia de horario, acciones y CEDEARs operan hasta las 18:00 pero bonos y caución siguen cerrando a las 17:00).
 * `REFERENCE_REFRESH_HOUR` / `REFERENCE_REFRESH_MINUTE` (`10:15` ART, L-V).
 * `DISABLE_SCHEDULER` / `SKIP_STARTUP_INGESTION` (tests / desarrollo offline).
 * `COMMISSION_PCT` (`0.11`), `MIN_NET_PROFIT_PCT` (`0.40`), `TRADE_SIZE_USD` (`500`): valores por defecto de los parámetros.

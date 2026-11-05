@@ -106,7 +106,7 @@ Al iniciar, el servidor:
 3. descarga los datos de referencia del día: flujos y clasificación de CompararBonos, cronogramas de provinciales (Bruno618 y Mercados Argentina), CER/TAMAR/A3500 del BCRA;
 4. consulta las cotizaciones y evalúa las estrategias.
 
-Después repite el ciclo **cada 60 segundos, solo en horario de rueda**. La referencia se actualiza todos los días hábiles a las 10:15.
+Después repite el ciclo **cada 60 segundos, solo en el horario de renta fija (10:30 a 17:00)**. La referencia se actualiza todos los días hábiles a las 10:15.
 
 ### Bull Market en tiempo real (opcional)
 1. Iniciá sesión en Bull Market en el navegador y abrí *Cotizaciones → Bonos*.
@@ -128,6 +128,7 @@ Todas las opciones se pueden definir con variables de entorno o en un archivo `.
 | `PORT` / `HOST` | `8050` / `127.0.0.1` | Por defecto solo escucha en esta PC. |
 | `POLLING_INTERVAL_SECONDS` | `60` | Frecuencia del ciclo de mercado. |
 | `MARKET_HOURS_ONLY` | `true` | Solo consulta en días hábiles y en horario de rueda (según BYMA). |
+| `FIXED_INCOME_OPEN` / `FIXED_INCOME_CLOSE` | `10:30` / `17:00` | Horario de renta fija y caución. Acota el que informa BYMA, que puede ser el de acciones y CEDEARs (hasta las 18:00 cuando EE.UU. cambia de horario). |
 | `COMMISSION_PCT` | `0.11` | Costo por operación, todo incluido (también editable en el dashboard). |
 | `MIN_NET_PROFIT_PCT` | `0.40` | Ganancia neta mínima para emitir una señal. |
 | `TRADE_SIZE_USD` | `500` | Tamaño de operación para evaluar la profundidad. |

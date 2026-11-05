@@ -2,7 +2,10 @@
 Calendario de mercado: decide si corresponde consultar fuentes de cotizaciones.
 
 Usa el endpoint `market-time` de BYMA (informa si hoy es día hábil y el horario de rueda),
-consultado una vez por día. Si BYMA no responde, se asume lunes a viernes 10:30–17:00.
+consultado una vez por día, acotado al horario de renta fija (FIXED_INCOME_OPEN/CLOSE): BYMA
+puede informar el horario de acciones y CEDEARs (hasta 18:00 cuando rige el horario de verano de
+EE.UU.), pero bonos y caución cierran a las 17:00. Si BYMA informa una rueda más corta
+(p. ej. media jornada), se respeta. Si BYMA no responde, se asume lunes a viernes 10:30–17:00.
 La ventana de consulta se extiende `delay_minutes` después del cierre porque BYMA Open Data
 publica con 20 minutos de demora.
 """
@@ -19,8 +22,8 @@ from backend.app.data.byma_client import BymaClient, MarketTime
 logger = logging.getLogger(__name__)
 
 ART = ZoneInfo(settings.TIMEZONE)
-DEFAULT_OPEN = time(10, 30)
-DEFAULT_CLOSE = time(17, 0)
+DEFAULT_OPEN = time.fromisoformat(settings.FIXED_INCOME_OPEN)
+DEFAULT_CLOSE = time.fromisoformat(settings.FIXED_INCOME_CLOSE)
 
 
 @dataclass
@@ -109,9 +112,10 @@ class MarketCalendar:
             return self._cached
         try:
             mt: MarketTime = await self.byma.fetch_market_time()
-            window = MarketWindow(today, mt.is_working_day, mt.opening, mt.closing, "BYMA")
+            window = MarketWindow(today, mt.is_working_day, max(mt.opening, DEFAULT_OPEN),
+                                  min(mt.closing, DEFAULT_CLOSE), "BYMA")
         except Exception as e:
-            logger.warning(f"No se pudo consultar el horario de BYMA, se asume L-V 10:30-17:00: {e}")
+            logger.warning(f"No se pudo consultar el horario de BYMA, se asume L-V {DEFAULT_OPEN:%H:%M}-{DEFAULT_CLOSE:%H:%M}: {e}")
             window = MarketWindow(today, is_business_day(today), DEFAULT_OPEN, DEFAULT_CLOSE, "FALLBACK")
         self._cached = window
         return window
