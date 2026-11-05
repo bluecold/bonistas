@@ -869,7 +869,7 @@
                         <td class="px-3 text-right">${pct(o.gross_pct)}</td>
                         <td class="px-3 text-right text-slate-400">-${o.fees_pct.toFixed(2)}%</td>
                         <td class="px-3 text-right text-slate-400">${o.direction === 'COMPRAR_CI_VENDER_24HS' ? '-' + o.carry_pct.toFixed(3) + '%' : '-'}</td>
-                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${o.coupon_status === 'AJUSTADO' ? o.flow_adjustment.toFixed(4) : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : '-')}</td>
+                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${o.coupon_status === 'AJUSTADO' ? o.flow_adjustment.toFixed(4) : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : (o.coupon_status === 'CORTE_PROBABLE' ? '⚠ corte' : '-'))}</td>
                         <td class="px-3 text-right font-bold ${o.net_pct >= data.params.min_net_profit_pct ? 'text-emerald-400' : (o.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">${pct(o.net_pct)}</td>
                         <td class="px-3 text-[10px] text-slate-400 font-sans whitespace-normal min-w-[260px]">${esc(o.notes.join(' '))}</td>
                     </tr>`).join('') || '<tr><td colspan="11" class="py-8 text-center text-slate-500 font-sans">Sin datos de puntas para CI y 24hs.</td></tr>';

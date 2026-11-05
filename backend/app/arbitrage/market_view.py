@@ -13,9 +13,10 @@ Reúne, para un instante dado:
 Convenciones:
 - Precios por 100 VN, en la moneda de la especie (ARS, USD MEP o USD cable).
 - Cantidades en nominales (VN).
-- Un flujo con fecha F pertenece al comprador si la liquidación S es < F. Con S >= F el
-  precio ya es "ex-flujo" (regla confirmada por el trader: si paga mañana y compro hoy en
-  24hs, el precio ya descuenta ese cupón).
+- Un flujo con fecha de pago F pertenece al comprador si la liquidación S es anterior al día
+  hábil previo a F (ver market_calendar.ex_date). Con S >= ex_date(F) el precio ya es "ex-cupón"
+  (regla del trader: si paga mañana y compro hoy en 24hs, ya lo descuenta; y verificado con TX28:
+  pago lunes 9/11, la liquidación del viernes 6/11 ya cotizaba ex-cupón).
 """
 
 from dataclasses import dataclass, field
@@ -28,7 +29,7 @@ from sqlalchemy.orm import Session
 from backend.app.db.models import BookQuote, MacroIndicator, ReferenceBond
 from backend.app.quant.cashflows import get_hard_dollar_schedule, base_ticker as hd_base
 from backend.app.services.market_book_service import MarketBookService
-from backend.app.services.market_calendar import ART, next_business_day
+from backend.app.services.market_calendar import ART, ex_date, next_business_day
 from backend.app.services.reference_data_service import ReferenceDataService
 
 
@@ -50,6 +51,7 @@ class Book:
     trade_time: Optional[str]
     timestamp: Optional[datetime]
     source: str
+    prev_close: Optional[float] = None
 
     @property
     def best_bid(self) -> Optional[float]:
@@ -112,7 +114,7 @@ def book_from_row(q: BookQuote) -> Book:
         bids = [Level(q.bid, q.bid_qty or 0.0)] if q.bid else []
         asks = [Level(q.ask, q.ask_qty or 0.0)] if q.ask else []
     return Book(q.symbol, q.base_ticker, q.currency, q.settlement, bids, asks, q.last,
-                q.trade_time, q.timestamp, q.source)
+                q.trade_time, q.timestamp, q.source, q.prev_close)
 
 
 MIXED_SOURCE = "MIXTO"
@@ -171,8 +173,9 @@ class MarketView:
     def flow_between(self, base: str, currency: str, after: date, upto: date,
                      fx_for_ars: Optional[float] = None) -> Tuple[float, str]:
         """
-        Suma de flujos con after < fecha <= upto, por 100 VN, expresada en la moneda de la
-        especie. Devuelve (monto, estado) con estado: 'SIN_PAGOS', 'AJUSTADO' o 'DESCONOCIDO'.
+        Suma de los flujos que cortan entre las dos liquidaciones (after < ex_date(F) <= upto),
+        por 100 VN, en la moneda de la especie: el precio de la liquidación `after` los incluye y
+        el de `upto` no. Devuelve (monto, estado): 'SIN_PAGOS', 'AJUSTADO' o 'DESCONOCIDO'.
         """
         info = self.flows_by_base.get(base)
         if info is None:
@@ -181,7 +184,7 @@ class MarketView:
                 abs((d - after).days) <= UNVERIFIED_FLOW_WINDOW_DAYS for d, _ in info[1]):
             return 0.0, "DESCONOCIDO"
         flow_ccy, flows = info
-        amount = sum(a for d, a in flows if after < d <= upto)
+        amount = sum(a for d, a in flows if after < ex_date(d) <= upto)
         if amount == 0:
             return 0.0, "SIN_PAGOS"
         species_is_usd = currency in ("MEP", "CCL")

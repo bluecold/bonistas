@@ -62,6 +62,12 @@ class CiOpportunity:
         return asdict(self)
 
 
+# Resguardos contra eventos del bono que no figuran en los flujos (cortes de cupón o
+# amortizaciones que la fuente ya no lista, canjes, etc.)
+STRUCTURAL_GAP_PCT = 3.0    # brecha bruta a partir de la cual se mira el cierre anterior
+ANOMALY_GAP_PCT = 10.0      # brecha bruta que nunca es un desarbitraje CI/24hs real
+
+
 def _r(v: Optional[float], n: int = 4) -> Optional[float]:
     return round(v, n) if v is not None else None
 
@@ -123,7 +129,22 @@ def detect_ci_vs_24hs(view: MarketView, params: TradingParams) -> List[CiOpportu
             else:
                 notes.append(f"Incluye costo de oportunidad de caución {days} día(s): -{carry_pct:.3f}%.")
 
-            signal = depth_ok and net >= min_net and coupon_status != "DESCONOCIDO"
+            # ¿La brecha ya existía al cierre anterior? Entonces es estructural (corte de cupón /
+            # amortización en el medio), no un desarbitraje.
+            if abs(gross) >= STRUCTURAL_GAP_PCT and ci.prev_close and h24.prev_close:
+                prev_gap = (ci.prev_close / h24.prev_close - 1.0) * 100.0
+                same_side = prev_gap if direction == "VENDER_CI_COMPRAR_24HS" else -prev_gap
+                if same_side >= abs(gross) * 0.5:
+                    coupon_status = "CORTE_PROBABLE" if coupon_status == "SIN_PAGOS" else coupon_status
+                    notes.insert(0, f"La brecha CI/24hs ya estaba al cierre anterior ({prev_gap:+.2f}%): "
+                                    "probable corte de cupón o amortización no informado. Sin señal.")
+            if abs(gross) >= ANOMALY_GAP_PCT and coupon_status not in ("AJUSTADO",):
+                notes.insert(0, f"Brecha de {gross:+.1f}% entre CI y 24hs: demasiado grande para un "
+                                "desarbitraje real. Verificar pagos del bono. Sin señal.")
+                if coupon_status == "SIN_PAGOS":
+                    coupon_status = "CORTE_PROBABLE"
+
+            signal = depth_ok and net >= min_net and coupon_status in ("SIN_PAGOS", "AJUSTADO")
             out.append(CiOpportunity(
                 symbol=sym, base=ci.base, currency=ci.currency, direction=direction,
                 sell_leg=Leg(sell_book.symbol, sell_book.settlement, "VENTA", _r(sell_px),

@@ -345,3 +345,10 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Curvas `?dolar=MEP|CCL` y selector en el dashboard: con cable se usan especies C (derivadas de la D si hace falta) o precio en pesos ÷ CCL implícito del AL30. Para bonos en dólares, en modo cable se prioriza la TIR propia sobre la de CompararBonos (no informa en qué dólar está medida). Ejemplo: CO32 9,46% (MEP) vs 11,04% (cable; Mercados Argentina publica 10,78%).
 * Dashboard: se corrigió una carrera al cambiar de curva mientras se recargaban los datos.
 
+### Corrección del corte de cupón con datos reales de Bull Market (2026-11-05)
+
+* Primer uso con Bull Market en vivo: señal falsa CI vs 24hs de **TX28 con +22,2% neto**. Causa: TX28 paga el lunes 9/11 y la liquidación 24hs del viernes 6/11 ya cotizaba ex-cupón (~$1.450) mientras CI (jueves 5/11) lo incluía (~$1.820).
+* Regla corregida (`market_calendar.ex_date`): el corte es el **día hábil anterior a la fecha efectiva de pago**. Un flujo afecta CI vs 24hs si `hoy < ex_date(F) <= liquidación 24hs`.
+* Resguardo por precio (`ci_24hs.py`): CompararBonos ya no lista un pago cortado para su propia liquidación, así que puede faltar en los flujos. Si la brecha bruta CI/24hs es ≥ 3% y ya existía al cierre anterior (≥ 50%), o si es ≥ 10%, el estado pasa a `CORTE_PROBABLE` y no hay señal (dashboard: "⚠ corte").
+* Verificación de la conexión: 427 libros de Bull Market (156 con 5 niveles), mismas unidades que BYMA y mismo bono base en las 246 especies comparables. Con la demora de 20 min, BYMA mostraba puntas de pre-apertura (AL30D compradora 47,99 vs 52,40 en Bull Market).
+

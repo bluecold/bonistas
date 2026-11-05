@@ -59,6 +59,26 @@ def next_business_day(d: date) -> date:
     return nxt
 
 
+def previous_business_day(d: date) -> date:
+    nxt = d - timedelta(days=1)
+    while nxt.weekday() >= 5:
+        nxt -= timedelta(days=1)
+    return nxt
+
+
+def ex_date(payment: date) -> date:
+    """
+    Primer día de liquidación que ya NO cobra el pago ("ex-cupón"): el día hábil anterior a la
+    fecha efectiva de pago (si el pago cae en fin de semana, se paga el día hábil siguiente).
+    Verificado con TX28 (pago lun 9/11/2026): la operación en 24hs que liquida el vie 6/11 ya
+    cotizaba ex-cupón, y la de CI que liquida el jue 5/11 todavía incluía el pago.
+    """
+    effective = payment
+    while effective.weekday() >= 5:
+        effective += timedelta(days=1)
+    return previous_business_day(effective)
+
+
 class MarketCalendar:
     def __init__(self, byma: Optional[BymaClient] = None):
         self.byma = byma or BymaClient()

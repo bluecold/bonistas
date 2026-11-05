@@ -104,12 +104,13 @@ def test_weekend_counts_three_days_of_caucion():
 
 def test_coupon_cutoff_is_not_an_arbitrage():
     """
-    Viernes 08-ene-2027: el AL30 paga 8,24 USD el 09-ene. El CI (liquida hoy) incluye el pago y
-    el 24hs (liquida el lunes 11) ya no. La diferencia de ~16% es el cupón, no un arbitraje.
+    Jueves 07-ene-2027: el AL30 paga 8,24 USD el sábado 09-ene (se paga el lunes 11). El corte es
+    el día hábil anterior al pago (viernes 8): el CI (liquida hoy, jueves) incluye el pago y el
+    24hs (liquida el viernes) ya no. La diferencia de ~16% es el cupón, no un arbitraje.
     """
     flows = {"AL30": ("USD", [(date(2027, 1, 9), 8.24), (date(2027, 7, 9), 8.21)])}
     v = view_of(bk("AL30D", "CI", bid=60.70, ask=60.90), bk("AL30D", "24HS", bid=52.30, ask=52.50),
-                today=date(2027, 1, 8), next_bd=date(2027, 1, 11), flows=flows)
+                today=date(2027, 1, 7), next_bd=date(2027, 1, 8), flows=flows)
     o = opp(detect_ci_vs_24hs(v, PARAMS), "AL30D", "VENDER_CI_COMPRAR_24HS")
     assert o.coupon_status == "AJUSTADO"
     assert o.flow_adjustment == pytest.approx(8.24)
@@ -123,7 +124,7 @@ def test_coupon_cutoff_peso_species_converted_with_implied_fx():
     v = view_of(
         bk("AL30", "CI", bid=96000, ask=96300, currency="ARS"), bk("AL30", "24HS", bid=82900, ask=83000, currency="ARS"),
         bk("AL30D", "CI", bid=60.6, ask=60.8),
-        today=date(2027, 1, 8), next_bd=date(2027, 1, 11), flows=flows,
+        today=date(2027, 1, 7), next_bd=date(2027, 1, 8), flows=flows,
     )
     o = opp(detect_ci_vs_24hs(v, PARAMS), "AL30", "VENDER_CI_COMPRAR_24HS")
     fx = ((96000 + 96300) / 2) / ((60.6 + 60.8) / 2)
@@ -185,7 +186,7 @@ def test_mep_round_trip_signal():
 
 
 def test_cross_settlement_skipped_when_bond_pays_in_between():
-    flows = {"AL30": ("USD", [(THU, 8.24)])}
+    flows = {"AL30": ("USD", [(date(2026, 11, 6), 8.24)])}   # pago viernes: corta el jueves (24hs)
     v = view_of(*fx_books("AL30", 83190, 83240, 52.5, 52.75, st="CI"),
                 *fx_books("AL30", 83190, 83240, 52.5, 52.75, st="24HS"), flows=flows)
     combos = {(q.ars_settlement, q.usd_settlement) for q in implied_fx_quotes(v, PARAMS) if q.kind == "MEP"}
@@ -326,3 +327,58 @@ def test_statistical_rules_need_real_history(db_session):
     assert E._signals_from_law_ratios([r]) == []
     r.calibration = "HISTORICA_40d"
     assert [s.action_recommended for s in E._signals_from_law_ratios([r])] == ["ROTAR_A_ARG"]
+
+
+# ---------------------------------------------------------------------------
+# Corte de cupón: día hábil anterior al pago, y resguardo por brecha estructural
+# ---------------------------------------------------------------------------
+
+def test_ex_date_is_previous_business_day():
+    from backend.app.services.market_calendar import ex_date
+    assert ex_date(date(2026, 11, 9)) == date(2026, 11, 6)     # pago lunes -> corte viernes
+    assert ex_date(date(2026, 11, 6)) == date(2026, 11, 5)     # pago viernes -> corte jueves
+    assert ex_date(date(2027, 1, 9)) == date(2027, 1, 8)       # pago sábado (se paga lunes) -> viernes
+
+
+def test_tx28_payment_monday_cuts_on_friday_settlement():
+    """Caso real TX28 (05-nov-2026): paga el lunes 9; el 24hs (viernes 6) ya cotiza ex-cupón."""
+    flows = {"TX28": ("ARS", [(date(2026, 11, 9), 394.9), (date(2027, 5, 10), 399.2)])}
+    v = view_of(bk("TX28", "CI", bid=1808, ask=1836.5, currency="ARS"),
+                bk("TX28", "24HS", bid=1426, ask=1476.5, currency="ARS"),
+                today=date(2026, 11, 5), next_bd=date(2026, 11, 6), flows=flows)
+    o = opp(detect_ci_vs_24hs(v, PARAMS), "TX28", "VENDER_CI_COMPRAR_24HS")
+    assert o.coupon_status == "AJUSTADO" and o.flow_adjustment == pytest.approx(394.9)
+    assert not o.signal
+
+
+def _bk_prev(symbol, st, bid, ask, prev):
+    b = bk(symbol, st, bid=bid, ask=ask, currency="ARS")
+    b.prev_close = prev
+    return b
+
+
+def test_structural_gap_without_flow_never_signals():
+    """La fuente ya no lista el pago (lo cortó para su liquidación) pero la brecha venía de ayer."""
+    flows = {"TX28": ("ARS", [(date(2027, 5, 10), 399.2)])}
+    v = view_of(_bk_prev("TX28", "CI", 1808, 1836.5, 1817.5), _bk_prev("TX28", "24HS", 1426, 1476.5, 1420.7),
+                today=date(2026, 11, 5), next_bd=date(2026, 11, 6), flows=flows)
+    o = opp(detect_ci_vs_24hs(v, PARAMS), "TX28", "VENDER_CI_COMPRAR_24HS")
+    assert o.coupon_status == "CORTE_PROBABLE" and not o.signal
+    assert any("cierre anterior" in n for n in o.notes)
+
+
+def test_huge_gap_never_signals_even_without_prev_close():
+    flows = {"ZZ28": ("ARS", [(date(2027, 5, 10), 50.0)])}
+    v = view_of(bk("ZZ28", "CI", bid=130, ask=131, currency="ARS"), bk("ZZ28", "24HS", bid=99, ask=100, currency="ARS"),
+                flows=flows)
+    o = opp(detect_ci_vs_24hs(v, PARAMS), "ZZ28", "VENDER_CI_COMPRAR_24HS")
+    assert o.coupon_status == "CORTE_PROBABLE" and not o.signal
+
+
+def test_real_small_dislocation_still_signals():
+    """Una brecha chica que NO estaba ayer sigue siendo señal."""
+    b1 = bk("XX27D", "CI", bid=101.0, ask=101.5); b1.prev_close = 100.2
+    b2 = bk("XX27D", "24HS", bid=99.5, ask=100.0); b2.prev_close = 100.1
+    v = view_of(b1, b2, flows=NO_FLOWS)
+    assert opp(detect_ci_vs_24hs(v, PARAMS), "XX27D", "VENDER_CI_COMPRAR_24HS").signal
+
