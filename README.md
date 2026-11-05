@@ -68,6 +68,11 @@ Historial de avisos y preferencias de notificación: notificaciones de Windows, 
 
 ![Alertas](docs/screenshots/alertas.jpg)
 
+### Guía de uso integrada
+Tocando el logo se abre una guía con el objetivo de la app, los primeros pasos, qué hace cada herramienta, cómo leer una señal, un glosario y las fuentes y límites. Se muestra sola la primera vez.
+
+![Guía de uso](docs/screenshots/guia.jpg)
+
 ### Simulador de swaps
 ![Simulador de swaps](docs/screenshots/simulador-swaps.jpg)
 

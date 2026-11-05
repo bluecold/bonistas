@@ -56,12 +56,13 @@
     <!-- Top Navigation Bar -->
     <header class="border-b border-brand-border bg-brand-card/95 backdrop-blur-md sticky top-0 z-40">
         <div class="max-w-[1720px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-4">
-            <!-- Brand & Status -->
-            <div class="flex items-center gap-3">
-                <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+            <!-- Brand & Status (clic: guía de uso) -->
+            <div class="flex items-center gap-3 cursor-pointer group" onclick="openGuide()" title="Guía de uso: qué hace la app y cómo usarla">
+                <div class="relative h-10 w-10 rounded-xl group-hover:scale-105 transition bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-500/10">
                     <div class="w-full h-full bg-brand-dark rounded-[10px] flex items-center justify-center">
                         <i data-lucide="activity" class="w-5 h-5 text-emerald-400"></i>
                     </div>
+                    <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-extrabold flex items-center justify-center border-2 border-brand-card">?</span>
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
@@ -540,6 +541,169 @@
     </main>
 
     <!-- Cashflow & Detail Modal -->
+
+    <!-- ========================================== -->
+    <!-- GUÍA DE USO (clic en el logo) -->
+    <!-- ========================================== -->
+    <div id="guide-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeGuide()">
+        <div class="bg-brand-card border border-brand-border rounded-2xl shadow-2xl w-full max-w-5xl h-[86vh] flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-brand-border">
+                <div class="flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5"><div class="w-full h-full bg-brand-dark rounded-[10px] flex items-center justify-center"><i data-lucide="book-open" class="w-4 h-4 text-emerald-400"></i></div></div>
+                    <div>
+                        <div class="text-white font-extrabold">Guía de uso</div>
+                        <div class="text-[11px] text-slate-400">Qué hace esta app, cómo usarla y cómo leer cada pantalla</div>
+                    </div>
+                </div>
+                <button onclick="closeGuide()" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-brand-elevated" title="Cerrar (Esc)"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="flex flex-1 min-h-0">
+                <nav id="guide-nav" class="w-52 shrink-0 border-r border-brand-border p-3 space-y-1 text-xs overflow-y-auto">
+                    <button data-g="objetivo" class="guide-link">🎯 Para qué sirve</button>
+                    <button data-g="inicio" class="guide-link">🚀 Primeros pasos</button>
+                    <button data-g="herramientas" class="guide-link">🧰 Herramientas</button>
+                    <button data-g="senal" class="guide-link">🔔 Cómo leer una señal</button>
+                    <button data-g="glosario" class="guide-link">📖 Glosario</button>
+                    <button data-g="limites" class="guide-link">⚠️ Fuentes y límites</button>
+                </nav>
+                <div id="guide-body" class="flex-1 overflow-y-auto p-6 text-sm text-slate-300 leading-relaxed">
+
+                    <section data-gs="objetivo" class="guide-sec space-y-4">
+                        <h2 class="text-lg font-bold text-white">Para qué sirve</h2>
+                        <p>Es un <b class="text-white">monitor de desarbitrajes en bonos argentinos</b>. Mira el mercado cada minuto durante la rueda y te avisa cuando aparece una operación que, <b class="text-white">después de pagar todos los costos</b>, deja una ganancia mayor a la mínima que configuraste.</p>
+                        <div class="grid md:grid-cols-3 gap-3">
+                            <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">1 · Observa</div><div class="text-xs">Puntas de compra y venta de todos los bonos (BYMA, y Bull Market en tiempo real si conectás tu sesión), flujos de pago, cauciones e indicadores.</div></div>
+                            <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">2 · Calcula</div><div class="text-xs">Compara CI contra 24hs, pesos contra dólares y bonos entre sí. Descuenta comisiones, caución, cupones y verifica que haya profundidad para tu tamaño.</div></div>
+                            <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">3 · Avisa</div><div class="text-xs">Si el neto supera el mínimo, genera una señal en el Command Center y una notificación de Windows. Vos decidís y operás en tu broker.</div></div>
+                        </div>
+                        <p>Con tus parámetros actuales, una oportunidad solo aparece si deja <b class="text-emerald-400" data-gp="min">-</b> neto o más, con un costo de <b class="text-white" data-gp="fee">-</b> por operación y profundidad suficiente para <b class="text-white" data-gp="size">-</b>.</p>
+                        <p class="text-xs text-slate-400">La app <b>no envía órdenes</b>: detecta, calcula y avisa. Además incluye herramientas de análisis (curvas, TIR, simulador de swaps) para decidir con más información.</p>
+                    </section>
+
+                    <section data-gs="inicio" class="guide-sec hidden space-y-4">
+                        <h2 class="text-lg font-bold text-white">Primeros pasos</h2>
+                        <ol class="space-y-3">
+                            <li class="flex gap-3"><span class="guide-step">1</span><div><b class="text-white">Revisá tus parámetros</b> en <a class="guide-go" data-tab="tab-arbitrage">Command Center</a>: costo por operación (todo incluido), ganancia neta mínima y tamaño de operación en USD. Todo se recalcula al guardar.</div></li>
+                            <li class="flex gap-3"><span class="guide-step">2</span><div><b class="text-white">Conectá Bull Market (opcional, recomendado).</b> Sin esto las puntas vienen de BYMA con <b>20 minutos de demora</b>. Pegá la cookie de tu sesión en el panel "Bull Market · tiempo real" (en el mismo panel están los pasos para copiarla). Cuando venza, la app te avisa.</div></li>
+                            <li class="flex gap-3"><span class="guide-step">3</span><div><b class="text-white">Configurá las alertas</b> en la campanita 🔔 de arriba a la derecha. Sugerencia: activá <i>"Solo confirmadas en tiempo real"</i> para que Windows te avise únicamente lo accionable. Usá <i>"Probar aviso"</i> para comprobar que las notificaciones se ven.</div></li>
+                            <li class="flex gap-3"><span class="guide-step">4</span><div><b class="text-white">Dejá la app corriendo durante la rueda.</b> Consulta el mercado cada minuto, solo en días hábiles y en horario de mercado. No hace falta tener esta pestaña abierta para recibir las notificaciones de Windows.</div></li>
+                            <li class="flex gap-3"><span class="guide-step">5</span><div><b class="text-white">Cuando llegue una señal:</b> abrila, verificá precios en tu broker y ejecutá las dos patas lo más juntas posible (ver <a class="guide-go-sec" data-g="senal">Cómo leer una señal</a>).</div></li>
+                        </ol>
+                        <p class="text-xs text-slate-400">Estado general: el indicador de arriba muestra si la rueda está abierta, si Bull Market está en vivo y si alguna fuente está caída (pasá el mouse para ver el detalle).</p>
+                    </section>
+
+                    <section data-gs="herramientas" class="guide-sec hidden space-y-3">
+                        <h2 class="text-lg font-bold text-white">Herramientas</h2>
+                        <div class="grid md:grid-cols-2 gap-3">
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="layout-grid" class="w-4 h-4"></i> Monitor de cotizaciones <a class="guide-go ml-auto" data-tab="tab-quotes">Abrir →</a></div>
+                                Todos los bonos con precio en pesos, MEP y cable, TIR, duration, paridad y valor técnico. Filtrá por familia o buscá un ticker. <b>Ficha</b> muestra el cronograma de pagos; <b>Swap</b> lo lleva al simulador.</div>
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="line-chart" class="w-4 h-4"></i> Curvas de rendimiento <a class="guide-go ml-auto" data-tab="tab-curves">Abrir →</a></div>
+                                Curvas por familia (soberanos, tasa fija, CER, provinciales, dollar linked, TAMAR/duales). La tabla de <b>desvíos</b> muestra qué bonos rinden más (verde, relativamente baratos) o menos (rojo, caros) que su curva: ideas para rotar. <b>Argentina vs región</b> muestra el riesgo país por tramo.</div>
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="target" class="w-4 h-4"></i> Command Center <a class="guide-go ml-auto" data-tab="tab-arbitrage">Abrir →</a></div>
+                                El centro operativo: parámetros, conexión con Bull Market, <b>señales activas</b>, matriz de prima de legislación AL/GD, ratios entre bonos de la curva y estrategias de valor relativo y breakeven de inflación.</div>
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="clock" class="w-4 h-4"></i> CI vs 24hs <a class="guide-go ml-auto" data-tab="tab-ci">Abrir →</a></div>
+                                Para cada especie compara Contado Inmediato contra 24hs en las dos direcciones: bruto, costos, caución, ajuste por cupón y neto. En verde, las que superan tu mínimo con profundidad suficiente.</div>
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="dollar-sign" class="w-4 h-4"></i> Dólar implícito <a class="guide-go ml-auto" data-tab="tab-fx">Abrir →</a></div>
+                                El dólar MEP o cable que obtenés operando cada bono (comprando en pesos y vendiendo en dólares, o al revés), con costos. Te dice con qué bono conviene comprar o vender dólares y si una ida y vuelta entre dos bonos deja ganancia.</div>
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="arrow-left-right" class="w-4 h-4"></i> Simulador de swaps <a class="guide-go ml-auto" data-tab="tab-swap">Abrir →</a></div>
+                                Cuántos nominales del bono B recibís vendiendo X nominales del bono A, descontando costos, y cuánta TIR ganás o perdés con la rotación.</div>
+                            <div class="guide-card md:col-span-2"><div class="guide-card-h"><i data-lucide="bell" class="w-4 h-4"></i> Alertas (campanita)</div>
+                                Historial de avisos: oportunidades nuevas, confirmaciones en tiempo real, sesión de Bull Market vencida y fuentes caídas. Desde ahí elegís qué notifica Windows.</div>
+                        </div>
+                    </section>
+
+                    <section data-gs="senal" class="guide-sec hidden space-y-4">
+                        <h2 class="text-lg font-bold text-white">Cómo leer una señal</h2>
+                        <div class="p-4 rounded-xl bg-brand-dark border border-emerald-500/50 text-xs space-y-2 max-w-xl">
+                            <div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">CI_24HS</span><span class="text-emerald-400 font-bold">Neto 0,52%</span><span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Confirmada en tiempo real</span></div>
+                            <div class="font-mono text-white">GD30D CI → GD30D 24HS</div>
+                            <div class="text-slate-400">GD30D: vender CI a 54,80 y comprar 24hs a 54,30 (920 VN ≈ USD 500). Bruto 0,92%, costos 0,22%, neto 0,52%… <span class="text-slate-500">· activa desde 11:42</span></div>
+                            <div class="text-[10px] text-slate-600">(ejemplo ilustrativo)</div>
+                        </div>
+                        <ul class="space-y-2 text-sm">
+                            <li><b class="text-white">Neto</b>: ganancia después de comisiones (las dos patas), caución y ajuste por cupón. Es lo que importa, no el bruto.</li>
+                            <li><b class="text-white">Confirmación</b>:
+                                <span class="text-emerald-300">Tiempo real</span> = todas las patas con puntas de Bull Market;
+                                <span class="text-amber-300">Parcial</span> = alguna pata con BYMA;
+                                <span class="text-amber-300">Demora 20 min</span> = todo con BYMA: tomalo como pista, el precio ya pudo haber cambiado.</li>
+                            <li><b class="text-white">Activa desde</b>: cuándo apareció. Las señales que duran pocos minutos suelen ser las reales; si dura horas, revisá si hay algo que la explique (cupón, restricción, baja liquidez).</li>
+                            <li><b class="text-white">Nominales (VN)</b>: cuánto operar para tu tamaño configurado. La app ya verificó que la punta tenga esa cantidad.</li>
+                        </ul>
+                        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-1">
+                            <div class="font-bold">Antes de operar</div>
+                            <div>1. Verificá las puntas en tu broker (pueden haber cambiado). 2. Ejecutá las dos patas lo más juntas posible. 3. En "vender CI / comprar 24hs" necesitás tener el bono en cartera. 4. Para MEP/CCL, revisá las restricciones vigentes de CNV (parking, cruces).</div>
+                        </div>
+                    </section>
+
+                    <section data-gs="glosario" class="guide-sec hidden space-y-3">
+                        <h2 class="text-lg font-bold text-white">Glosario</h2>
+                        <dl class="grid md:grid-cols-2 gap-x-6 gap-y-3 text-xs">
+                            <div><dt class="guide-dt">CI / 24hs</dt><dd>Plazos de liquidación: Contado Inmediato liquida hoy; 24hs, el próximo día hábil (un viernes, el lunes).</dd></div>
+                            <div><dt class="guide-dt">Corte de cupón</dt><dd>Si un bono paga renta o amortización entre las dos liquidaciones, el precio de 24hs ya no la incluye. La app descuenta ese pago; sin cronograma conocido (¿?) no genera señal.</dd></div>
+                            <div><dt class="guide-dt">Especies D y C</dt><dd>El mismo bono cotizado en dólares MEP (D, ej. AL30D) o en dólares cable (C, ej. AL30C). Sin sufijo: en pesos.</dd></div>
+                            <div><dt class="guide-dt">MEP / CCL / Canje</dt><dd>Dólar que surge de comprar un bono en pesos y venderlo en dólares locales (MEP) o en el exterior (cable). Canje = diferencia entre cable y MEP.</dd></div>
+                            <div><dt class="guide-dt">Ley local vs NY</dt><dd>Bonares (AL, AE) se rigen por ley argentina; Globales (GD), por ley de Nueva York. Mismos flujos; la ley NY suele cotizar con prima.</dd></div>
+                            <div><dt class="guide-dt">TIR</dt><dd>Rendimiento anual si comprás hoy y mantenés hasta el vencimiento cobrando todos los flujos.</dd></div>
+                            <div><dt class="guide-dt">Duration modificada (MD)</dt><dd>Sensibilidad del precio a la tasa: con MD 4, si la TIR sube 1 punto el precio cae cerca de 4%.</dd></div>
+                            <div><dt class="guide-dt">TEM</dt><dd>Tasa efectiva mensual. Es la forma habitual de comparar LECAP y BONCAP.</dd></div>
+                            <div><dt class="guide-dt">TIR real (CER)</dt><dd>Rendimiento por encima de la inflación en bonos que ajustan capital por CER.</dd></div>
+                            <div><dt class="guide-dt">Paridad / Valor técnico</dt><dd>Valor técnico = capital residual + intereses corridos. Paridad = precio / valor técnico.</dd></div>
+                            <div><dt class="guide-dt">Caución</dt><dd>Préstamo garantizado a muy corto plazo. Su tasa es el costo de financiar un día entre CI y 24hs.</dd></div>
+                            <div><dt class="guide-dt">Profundidad</dt><dd>Cantidad disponible en las puntas. La app recorre el libro hasta cubrir tu tamaño; si no alcanza, no hay señal.</dd></div>
+                            <div><dt class="guide-dt">Desvío vs curva</dt><dd>Diferencia en puntos básicos (1 pb = 0,01%) entre la TIR del bono y la de su curva ajustada. Positivo = relativamente barato.</dd></div>
+                            <div><dt class="guide-dt">Riesgo país por tramo</dt><dd>TIR de los Globales menos la de los Treasuries de EE.UU. con la misma duration.</dd></div>
+                            <div><dt class="guide-dt">Z-score</dt><dd>Cuántos desvíos estándar se aleja un ratio de su promedio histórico. Solo se usa para alertar con al menos 20 ruedas de historia propia.</dd></div>
+                            <div><dt class="guide-dt">Ratio AL/GD</dt><dd>Precio del Global dividido el del Bonar equivalente. Mide la prima por ley NY; valores extremos sugieren rotar.</dd></div>
+                        </dl>
+                    </section>
+
+                    <section data-gs="limites" class="guide-sec hidden space-y-4">
+                        <h2 class="text-lg font-bold text-white">Fuentes y límites</h2>
+                        <table class="w-full text-xs">
+                            <thead class="text-slate-500 uppercase text-[10px]"><tr><th class="text-left py-1">Fuente</th><th class="text-left">Para qué</th><th class="text-left">Demora</th></tr></thead>
+                            <tbody class="divide-y divide-brand-border/60">
+                                <tr><td class="py-1.5 text-white">BYMA Open Data</td><td>Puntas CI/24hs, cauciones, horario de mercado</td><td class="text-amber-300">20 min</td></tr>
+                                <tr><td class="py-1.5 text-white">Bull Market (tu sesión)</td><td>Puntas con 5 niveles de profundidad</td><td class="text-emerald-300">Tiempo real</td></tr>
+                                <tr><td class="py-1.5 text-white">Bonistas.com</td><td>TIR, duration, paridad, valor técnico</td><td>Intradiario</td></tr>
+                                <tr><td class="py-1.5 text-white">CompararBonos</td><td>Flujos de pago y clasificación de bonos</td><td>Diario</td></tr>
+                                <tr><td class="py-1.5 text-white">BCRA</td><td>CER, TAMAR, dólar A3500</td><td>Diario</td></tr>
+                                <tr><td class="py-1.5 text-white">DolarAPI</td><td>Dólar MEP, CCL y oficial de referencia</td><td>Intradiario</td></tr>
+                            </tbody>
+                        </table>
+                        <ul class="list-disc ml-5 space-y-1.5">
+                            <li>Las cotizaciones se consultan cada minuto, <b>solo en días hábiles y en horario de rueda</b>. Fuera de horario se muestra el último cierre.</li>
+                            <li>La cookie de Bull Market se guarda solo en esta PC (carpeta <code>secrets/</code>) y nunca se muestra. La app no usa tu usuario ni tu contraseña.</li>
+                            <li>Las reglas estadísticas (z-score) necesitan unas 20 ruedas de uso para tener historia propia; hasta entonces se muestran como dato informativo.</li>
+                            <li>Bonos sin cronograma de pagos conocido aparecen en las tablas, pero nunca generan señales.</li>
+                        </ul>
+                        <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-200">
+                            Herramienta de análisis de uso personal. <b>No es asesoramiento financiero</b> ni ejecuta órdenes. Los cálculos pueden tener errores o basarse en datos desactualizados: verificá siempre en tu broker antes de operar.
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <div class="flex items-center justify-between px-6 py-3 border-t border-brand-border text-xs">
+                <span class="text-slate-500">Podés volver a abrir esta guía tocando el logo de arriba a la izquierda.</span>
+                <div class="flex gap-2">
+                    <button onclick="guideStep(-1)" class="px-3 py-1.5 rounded-lg bg-brand-elevated text-slate-300 hover:text-white">← Anterior</button>
+                    <button onclick="guideStep(1)" id="guide-next" class="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400">Siguiente →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .guide-link { display: block; width: 100%; text-align: left; padding: 0.5rem 0.75rem; border-radius: 0.5rem; color: #94a3b8; font-weight: 600; }
+        .guide-link:hover { background: #1e293b; color: #f8fafc; }
+        .guide-link.active { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .guide-step { flex-shrink: 0; width: 1.6rem; height: 1.6rem; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 800; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .guide-card { padding: 0.9rem; border-radius: 0.75rem; background: #070a12; border: 1px solid #1e293b; font-size: 0.75rem; color: #94a3b8; }
+        .guide-card-h { display: flex; align-items: center; gap: 0.5rem; color: #f8fafc; font-weight: 700; font-size: 0.8rem; margin-bottom: 0.35rem; }
+        .guide-go, .guide-go-sec { color: #34d399; font-weight: 700; cursor: pointer; }
+        .guide-go:hover, .guide-go-sec:hover { text-decoration: underline; }
+        .guide-dt { color: #f8fafc; font-weight: 700; margin-bottom: 0.15rem; }
+    </style>
+
     <div id="cashflow-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
             <div class="p-5 border-b border-brand-border flex items-center justify-between">
@@ -602,6 +766,8 @@
             setInterval(fetchStatus, 60000);
             fetchAlerts();
             setInterval(fetchAlerts, 20000);
+            // Primera visita: mostrar la guía de uso
+            if (localStorage.getItem('guideSeen') !== '1') setTimeout(() => openGuide('objetivo'), 600);
 
             // Auto-polling cada 15 segundos
             setInterval(() => {
@@ -1458,6 +1624,57 @@
                 tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-rose-400">Error al cargar cronograma de flujos.</td></tr>`;
             }
         }
+
+        // ==================== GUÍA DE USO ====================
+        const GUIDE_ORDER = ['objetivo', 'inicio', 'herramientas', 'senal', 'glosario', 'limites'];
+        let guideCurrent = 'objetivo';
+
+        function showGuideSection(id) {
+            guideCurrent = id;
+            document.querySelectorAll('.guide-sec').forEach(sec => sec.classList.toggle('hidden', sec.dataset.gs !== id));
+            document.querySelectorAll('.guide-link').forEach(b => b.classList.toggle('active', b.dataset.g === id));
+            document.getElementById('guide-body').scrollTop = 0;
+            const last = GUIDE_ORDER.indexOf(id) === GUIDE_ORDER.length - 1;
+            document.getElementById('guide-next').textContent = last ? 'Empezar' : 'Siguiente →';
+        }
+
+        function guideStep(delta) {
+            const i = GUIDE_ORDER.indexOf(guideCurrent) + delta;
+            if (i >= GUIDE_ORDER.length) { closeGuide(); return; }
+            showGuideSection(GUIDE_ORDER[Math.max(0, i)]);
+        }
+
+        async function openGuide(section) {
+            document.getElementById('guide-modal').classList.remove('hidden');
+            showGuideSection(section || guideCurrent);
+            renderIcons();
+            try {
+                const p = await (await fetch('/api/v1/settings/trading')).json();
+                const pct = v => `${String(v).replace('.', ',')}%`;
+                document.querySelectorAll('[data-gp="min"]').forEach(e => e.textContent = pct(p.min_net_profit_pct));
+                document.querySelectorAll('[data-gp="fee"]').forEach(e => e.textContent = pct(p.commission_pct));
+                document.querySelectorAll('[data-gp="size"]').forEach(e => e.textContent = `USD ${Number(p.trade_size_usd).toLocaleString('es-AR')}`);
+            } catch (err) { console.error('Guía: parámetros', err); }
+        }
+
+        function closeGuide() {
+            document.getElementById('guide-modal').classList.add('hidden');
+            localStorage.setItem('guideSeen', '1');
+        }
+
+        document.addEventListener('click', e => {
+            const link = e.target.closest('.guide-link, .guide-go-sec');
+            if (link) { showGuideSection(link.dataset.g); return; }
+            const go = e.target.closest('.guide-go');
+            if (go) {
+                closeGuide();
+                switchTab(go.dataset.tab, document.getElementById(go.dataset.tab.replace('tab-', 'tab-btn-')));
+            }
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !document.getElementById('guide-modal').classList.contains('hidden')) closeGuide();
+        });
 
         function closeModal() {
             document.getElementById('cashflow-modal').classList.add('hidden');

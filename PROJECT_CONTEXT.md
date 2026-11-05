@@ -319,3 +319,8 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Exclusiones informadas: < 20 días al vencimiento, TIR fuera de [−30%, 80%], sin TIR ni flujos (hoy la mayoría de los provinciales: CompararBonos no publica sus flujos).
 * Dashboard: selector por familia, etiquetas opcionales, tooltip completo, tabla de desvíos y lista de excluidos.
 
+### Guía de uso en el dashboard (2026-11-05)
+
+* Clic en el logo (badge "?") ⇒ modal con 6 secciones navegables: para qué sirve (con los parámetros actuales del usuario), primeros pasos, herramientas (con botón "Abrir →" a cada pestaña), cómo leer una señal, glosario y fuentes/límites (incluye el aviso de que no es asesoramiento financiero).
+* Se abre sola en la primera visita (`localStorage.guideSeen`); se cierra con Esc, clic afuera o la X.
+
