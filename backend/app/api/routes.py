@@ -45,6 +45,7 @@ from backend.app.services.reference_data_service import ReferenceDataService
 from backend.app.services.market_calendar import MarketCalendar, next_business_day
 from backend.app.services.source_health import source_health
 from backend.app.services.bullmarket_session import InvalidCookieError
+from backend.app.services.alert_service import AlertService, get_prefs, update_prefs
 from backend.app.services.trading_settings import get_params, update_params
 from backend.app.config import settings
 
@@ -53,6 +54,15 @@ ingestion_service = IngestionService()
 market_book_service = MarketBookService()
 bullmarket_session = market_book_service.bm_session
 arbitrage_engine = ArbitrageEngine(ingestion_service, book_service=market_book_service)
+alert_service = AlertService()
+arbitrage_engine.listeners.append(alert_service.on_evaluation)
+
+
+def check_source_alerts(db: Session) -> None:
+    """Alertas de sesión vencida / fuente caída después de consultar las fuentes."""
+    alert_service.check_sources(db, source_health.snapshot(),
+                                bm_just_expired=market_book_service.bm_just_expired,
+                                bm_status=bullmarket_session.status)
 reference_service = ReferenceDataService()
 market_calendar = MarketCalendar()
 
@@ -131,6 +141,7 @@ async def trigger_ingestion(db: Session = Depends(get_db)):
         errors.append(f"BYMA: {byma['books_error']}")
     bm = await market_book_service.ingest_bullmarket(db)
     details["bullmarket"] = bm
+    check_source_alerts(db)
     if "error" in bm:
         errors.append(f"Bull Market: {bm['error']}")
     bonistas_failed = any(e.startswith("Bonistas") for e in errors)
@@ -228,6 +239,7 @@ async def set_bullmarket_session(req: BullMarketCookieRequest, db: Session = Dep
     except InvalidCookieError as e:
         raise HTTPException(status_code=422, detail=str(e))
     result = await market_book_service.ingest_bullmarket(db)
+    market_book_service.bm_just_expired = False     # el trader está mirando: no hace falta notificar
     status = bullmarket_session.to_dict()
     status["test"] = {k: v for k, v in result.items() if k in ("rows", "books", "error")}
     if status["status"] == "ACTIVA":
@@ -691,4 +703,52 @@ def put_trading_settings(values: Dict[str, float], db: Session = Depends(get_db)
 def get_arbitrage_command_center(db: Session = Depends(get_db)):
     """Retorna la matriz de control y monitoreo en tiempo real con semáforos e indicadores clave."""
     return arbitrage_engine.get_arbitrage_command_center(db)
+
+
+# ==========================================
+# ALERTAS Y NOTIFICACIONES (ETAPA 5)
+# ==========================================
+
+class MarkReadRequest(BaseModel):
+    ids: Optional[List[int]] = None     # None = todas
+
+
+@router.get("/alerts", tags=["Alertas"])
+def get_alerts(
+    limit: int = Query(50, ge=1, le=500),
+    unread_only: bool = False,
+    after_id: Optional[int] = Query(None, description="Solo alertas posteriores a este id"),
+    db: Session = Depends(get_db),
+):
+    """Historial de alertas (más nuevas primero) y cantidad sin leer."""
+    alerts = AlertService.list_alerts(db, limit=limit, unread_only=unread_only, after_id=after_id)
+    return {"unread": AlertService.unread_count(db), "alerts": [AlertService.to_dict(a) for a in alerts]}
+
+
+@router.post("/alerts/read", tags=["Alertas"])
+def mark_alerts_read(req: MarkReadRequest, db: Session = Depends(get_db)):
+    return {"marked": AlertService.mark_read(db, req.ids), "unread": AlertService.unread_count(db)}
+
+
+@router.post("/alerts/test", tags=["Alertas"])
+def send_test_alert(db: Session = Depends(get_db)):
+    """Genera una alerta de prueba (y la notificación de Windows si está habilitada)."""
+    prefs = get_prefs(db)
+    a = alert_service.emit(db, "PRUEBA", "INFO", "Prueba de notificación",
+                           "Si ves este aviso, las notificaciones de Windows funcionan.",
+                           toast=prefs.windows)
+    return AlertService.to_dict(a)
+
+
+@router.get("/settings/notifications", tags=["Alertas"])
+def get_notification_settings(db: Session = Depends(get_db)):
+    return get_prefs(db).to_dict()
+
+
+@router.put("/settings/notifications", tags=["Alertas"])
+def put_notification_settings(values: Dict[str, Any], db: Session = Depends(get_db)):
+    try:
+        return update_prefs(db, values).to_dict()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 

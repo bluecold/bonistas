@@ -98,6 +98,29 @@
                     <span id="market-status-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
                     <span id="market-status-text" class="hidden sm:inline">Estado...</span>
                 </div>
+                <div class="relative">
+                    <button onclick="toggleAlerts()" id="btn-alerts" title="Alertas" class="relative flex items-center px-2.5 py-1.5 rounded-lg bg-brand-elevated border border-brand-border text-slate-300 hover:text-white transition">
+                        <i data-lucide="bell" class="w-4 h-4"></i>
+                        <span id="alerts-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold font-mono flex items-center justify-center">0</span>
+                    </button>
+                    <div id="alerts-panel" class="hidden absolute right-0 mt-2 w-[420px] max-w-[92vw] bg-brand-card border border-brand-border rounded-xl shadow-2xl z-50 text-xs">
+                        <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border">
+                            <span class="font-bold text-white">Alertas</span>
+                            <div class="flex items-center gap-3">
+                                <button onclick="testAlert()" class="text-slate-400 hover:text-white">Probar aviso</button>
+                                <button onclick="markAllRead()" class="text-emerald-400 hover:text-emerald-300">Marcar leídas</button>
+                            </div>
+                        </div>
+                        <div class="px-4 py-2 border-b border-brand-border flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
+                            <label class="flex items-center gap-1.5"><input type="checkbox" id="pref-windows" onchange="savePrefs()"> Notificaciones de Windows</label>
+                            <label class="flex items-center gap-1.5" title="Las detectadas con BYMA (20 min de demora) quedan solo en este panel"><input type="checkbox" id="pref-realtime" onchange="savePrefs()"> Solo confirmadas en tiempo real</label>
+                            <label class="flex items-center gap-1.5"><input type="checkbox" id="pref-sources" onchange="savePrefs()"> Sesión vencida / fuentes caídas</label>
+                        </div>
+                        <div id="alerts-list" class="max-h-[420px] overflow-y-auto divide-y divide-brand-border/60">
+                            <div class="p-4 text-slate-500">Sin alertas.</div>
+                        </div>
+                    </div>
+                </div>
                 <button onclick="refreshAllData()" id="btn-refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition shadow-sm active:scale-95">
                     <i data-lucide="refresh-cw" id="refresh-icon" class="w-3.5 h-3.5"></i>
                     <span>Actualizar</span>
@@ -568,6 +591,8 @@
             fetchQuotes();
             fetchArbitrage();
             setInterval(fetchStatus, 60000);
+            fetchAlerts();
+            setInterval(fetchAlerts, 20000);
 
             // Auto-polling cada 15 segundos
             setInterval(() => {
@@ -754,6 +779,97 @@
             const msg = document.getElementById('bm-msg');
             const res = await fetch('/api/v1/bullmarket/session', {method: 'DELETE'});
             if (res.ok) { renderBm(await res.json()); msg.textContent = 'Sesión borrada.'; msg.className = 'text-slate-400'; fetchStatus(); }
+        }
+
+        // ---------------------------------------------------------------- alertas
+        let lastAlertId = null;
+        const ALERT_STYLE = {
+            OPORTUNIDAD: ['border-emerald-500/50', 'text-emerald-300', 'trending-up'],
+            AVISO: ['border-amber-500/50', 'text-amber-300', 'alert-triangle'],
+            INFO: ['border-slate-500/40', 'text-slate-300', 'info'],
+        };
+
+        function toggleAlerts() {
+            const panel = document.getElementById('alerts-panel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) { fetchPrefs(); fetchAlerts(); }
+        }
+
+        document.addEventListener('click', e => {
+            const panel = document.getElementById('alerts-panel');
+            if (panel && !panel.classList.contains('hidden') && !panel.parentElement.contains(e.target)) panel.classList.add('hidden');
+        });
+
+        function showInPageToast(a) {
+            const [border, color] = ALERT_STYLE[a.severity] || ALERT_STYLE.INFO;
+            let box = document.getElementById('toast-box');
+            if (!box) {
+                box = document.createElement('div');
+                box.id = 'toast-box';
+                box.className = 'fixed bottom-4 right-4 z-50 space-y-2 w-[360px] max-w-[92vw]';
+                document.body.appendChild(box);
+            }
+            const el = document.createElement('div');
+            el.className = `p-3 rounded-xl bg-brand-card border ${border} shadow-2xl text-xs cursor-pointer`;
+            el.innerHTML = `<div class="font-bold ${color}">${esc(a.title)}</div><div class="text-slate-400 mt-1">${esc(a.message || '')}</div>`;
+            el.onclick = () => { el.remove(); toggleAlerts(); };
+            box.appendChild(el);
+            setTimeout(() => el.remove(), 15000);
+        }
+
+        async function fetchAlerts() {
+            try {
+                const data = await (await fetch('/api/v1/alerts?limit=40')).json();
+                const badge = document.getElementById('alerts-badge');
+                badge.textContent = data.unread > 99 ? '99+' : data.unread;
+                badge.classList.toggle('hidden', !data.unread);
+                const newest = data.alerts.length ? data.alerts[0].id : 0;
+                if (lastAlertId !== null) {
+                    data.alerts.filter(a => a.id > lastAlertId).reverse().forEach(showInPageToast);
+                    if (data.alerts.some(a => a.id > lastAlertId && (a.kind === 'OPORTUNIDAD' || a.kind === 'CONFIRMADA'))) {
+                        fetchArbitrage();
+                    }
+                }
+                lastAlertId = Math.max(lastAlertId ?? 0, newest);
+                const fmt = iso => new Date(iso).toLocaleString('es-AR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'});
+                document.getElementById('alerts-list').innerHTML = data.alerts.map(a => {
+                    const [border, color] = ALERT_STYLE[a.severity] || ALERT_STYLE.INFO;
+                    return `<div class="px-4 py-2.5 ${a.read ? 'opacity-60' : ''} border-l-2 ${border}">
+                        <div class="flex justify-between gap-2"><span class="font-bold ${color}">${esc(a.title)}</span>
+                        <span class="text-slate-500 font-mono whitespace-nowrap">${fmt(a.timestamp)}</span></div>
+                        <div class="text-slate-400 mt-0.5">${esc(a.message || '')}</div>
+                        <div class="text-[10px] text-slate-600 mt-0.5">${a.notified ? 'Notificada en Windows' : 'Solo en el panel'}</div>
+                    </div>`;
+                }).join('') || '<div class="p-4 text-slate-500">Sin alertas.</div>';
+            } catch (err) { console.error('Error alertas:', err); }
+        }
+
+        async function markAllRead() {
+            await fetch('/api/v1/alerts/read', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+            fetchAlerts();
+        }
+
+        async function testAlert() {
+            await fetch('/api/v1/alerts/test', {method: 'POST'});
+            fetchAlerts();
+        }
+
+        async function fetchPrefs() {
+            try {
+                const p = await (await fetch('/api/v1/settings/notifications')).json();
+                document.getElementById('pref-windows').checked = p.windows;
+                document.getElementById('pref-realtime').checked = p.only_realtime;
+                document.getElementById('pref-sources').checked = p.sources;
+            } catch (err) { console.error('Error preferencias:', err); }
+        }
+
+        async function savePrefs() {
+            const body = {
+                windows: document.getElementById('pref-windows').checked,
+                only_realtime: document.getElementById('pref-realtime').checked,
+                sources: document.getElementById('pref-sources').checked,
+            };
+            await fetch('/api/v1/settings/notifications', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
         }
 
         async function fetchStatus() {

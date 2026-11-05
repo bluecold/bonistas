@@ -221,6 +221,7 @@ El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `
 * `BULLMARKET_COOKIE_FILE` (`secrets/bullmarket_cookie.txt`): dónde se guarda la cookie que se pega en el dashboard (carpeta ignorada por git).
 * `BULLMARKET_COOKIE`: alternativa en el `.env` (se usa si el archivo no existe). **Nunca** en el código.
 * `BULLMARKET_MAX_AGE_SECONDS` (`180`): antigüedad máxima de la última consulta OK de Bull Market para usar sus puntas; si no, se vuelve a BYMA.
+* `WINDOWS_NOTIFICATIONS` (`true`): notificaciones de escritorio de Windows (el panel de alertas funciona siempre; las preferencias finas se editan en el dashboard).
 
 ---
 
@@ -293,4 +294,18 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Endpoints: `GET|PUT|DELETE /bullmarket/session`; `/status` incluye `bullmarket`; `/books?source=BULLMARKET` devuelve `depth`; Command Center informa `book_sources`.
 * Dashboard: panel "Bull Market · tiempo real" (pegar cookie, estado, instrucciones), estado en el encabezado y etiqueta "Parcial" en las señales.
 * Tests: `test_stage4_bullmarket.py` (fixture recortado de una respuesta real, solo datos de mercado; nunca se usa la cookie real).
+
+### Etapa 5 — Alertas y notificaciones (2026-11-05)
+
+* `services/notifier.py`: toast nativo de Windows vía PowerShell (sin dependencias). Script fijo (`-EncodedCommand`); título/mensaje/URL por variables de entorno y escapados para XML ⇒ el texto de una alerta nunca se ejecuta. Clic en el aviso ⇒ abre el dashboard.
+* `services/alert_service.py` + tabla `alerts` (historial del panel):
+  * `OPORTUNIDAD`: señal nueva (solo cuando aparece). `CONFIRMADA`: una señal detectada con demora pasa a `TIEMPO_REAL` con Bull Market.
+  * `SESION_VENCIDA` (una vez por vencimiento), `FUENTE_CAIDA` (BYMA / Bonistas / Bull Market con 3 fallas seguidas) y `FUENTE_OK`.
+  * Anti-ruido: una señal que desaparece y reaparece no se vuelve a avisar por 15 min.
+  * Preferencias (`user_settings.notifications`): notificaciones de Windows sí/no, solo confirmadas en tiempo real, avisos de fuentes.
+* El motor expone `listeners` (se llaman tras cada evaluación, también en `/ingest` y `/arbitrage/evaluate`); un error en una alerta nunca corta la evaluación.
+* Endpoints: `GET /alerts` (`unread_only`, `after_id`), `POST /alerts/read`, `POST /alerts/test`, `GET|PUT /settings/notifications`.
+* Dashboard: campana con contador de no leídas, panel con historial y preferencias, avisos dentro de la página para alertas nuevas (consulta cada 20 s).
+* Corrección: SQLite devolvía fechas sin zona horaria y el navegador las mostraba corridas 3 h ("activa desde", alertas). `db/types.py::UTCDateTime` devuelve siempre UTC con zona.
+* Tests: `test_stage5_alerts.py`. Los tests nunca muestran notificaciones reales (`WINDOWS_NOTIFICATIONS=false` + `send` anulado en conftest).
 

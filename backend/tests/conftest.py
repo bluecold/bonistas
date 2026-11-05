@@ -25,6 +25,8 @@ os.environ["SKIP_STARTUP_INGESTION"] = "true"
 # Bull Market: nunca usar la cookie real del trader en los tests
 os.environ["BULLMARKET_COOKIE_FILE"] = str(Path(_TMP_DIR, "secrets", "bullmarket_cookie.txt"))
 os.environ["BULLMARKET_COOKIE"] = ""
+# Nunca mostrar notificaciones reales de Windows al correr los tests
+os.environ["WINDOWS_NOTIFICATIONS"] = "false"
 
 import pytest  # noqa: E402
 
@@ -133,6 +135,10 @@ def _install_offline_sources(monkeypatch):
         return [dict(r, term=str(term)) for r in bm_rows]
 
     monkeypatch.setattr(BullMarketClient, "fetch_raw", fake_bm_raw)
+
+    # Red de seguridad: aunque algún test construya un WindowsToastNotifier, no lanza PowerShell
+    from backend.app.services.notifier import WindowsToastNotifier
+    monkeypatch.setattr(WindowsToastNotifier, "send", lambda self, title, message, url=None: False)
 
 
 @pytest.fixture(autouse=True)

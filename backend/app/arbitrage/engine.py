@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -71,7 +71,10 @@ class ArbitrageEngine:
         self.book_service = book_service or MarketBookService()
         self.last_view: Optional[MarketView] = None
         self.last_new_signals: List[ArbitrageSignal] = []
+        self.last_upgraded_signals: List[ArbitrageSignal] = []   # pasaron a TIEMPO_REAL en este ciclo
         self.last_expired_count = 0
+        # Funciones (db, nuevas, confirmadas) que se llaman después de cada evaluación (alertas)
+        self.listeners: List[Callable[[Session, List[ArbitrageSignal], List[ArbitrageSignal]], None]] = []
 
     # ------------------------------------------------------------------ escaneo
     def scan(self, db: Session, params: Optional[TradingParams] = None,
@@ -221,6 +224,7 @@ class ArbitrageEngine:
                 active[row.signal_key] = row
         seen_keys = set()
         new: List[ArbitrageSignal] = []
+        upgraded: List[ArbitrageSignal] = []
         current: List[ArbitrageSignal] = []
 
         for g in generated:
@@ -235,6 +239,8 @@ class ArbitrageEngine:
                                       leg_buy_ticker=g.leg_buy_ticker, action_recommended=g.action_recommended)
                 db.add(row)
                 new.append(row)
+            elif row.confirmation != "TIEMPO_REAL" and g.confirmation == "TIEMPO_REAL":
+                upgraded.append(row)
             row.timestamp = now
             row.last_seen = now
             row.metric_name = g.metric_name
@@ -256,8 +262,14 @@ class ArbitrageEngine:
 
         db.commit()
         self.last_new_signals = new
+        self.last_upgraded_signals = upgraded
         self.last_expired_count = expired
         logger.info(f"ArbitrageEngine: {len(current)} activas ({len(new)} nuevas, {expired} expiradas).")
+        for listener in self.listeners:
+            try:
+                listener(db, new, upgraded)
+            except Exception as e:     # una alerta fallida nunca corta la evaluación
+                logger.error(f"Listener de señales: {e}")
         return current
 
     @staticmethod

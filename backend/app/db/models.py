@@ -15,6 +15,7 @@ from sqlalchemy import (
     JSON,
 )
 from sqlalchemy.orm import relationship
+from backend.app.db.types import UTCDateTime
 from backend.app.db.session import Base
 
 class Bond(Base):
@@ -46,7 +47,7 @@ class PriceSnapshot(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ticker = Column(String(20), ForeignKey("bonds.ticker"), nullable=False, index=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc), index=True)
     settlement_type = Column(String(10), nullable=False, default="24HS") # 'CI', '24HS'
     
     price_ars = Column(Numeric(14, 4), nullable=True)
@@ -79,7 +80,7 @@ class ArbitrageSignal(Base):
     __tablename__ = "arbitrage_signals"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc), index=True)
     strategy_name = Column(String(50), nullable=False, index=True) # 'LAW_PREMIUM', 'RELATIVE_VALUE_CURVE', 'BREAKEVEN_CER_FIXED', 'DUAL_TAMAR_CER'
     leg_sell_ticker = Column(String(20), nullable=False)
     leg_buy_ticker = Column(String(20), nullable=False)
@@ -92,8 +93,8 @@ class ArbitrageSignal(Base):
     notes = Column(Text, nullable=True)
     # Persistencia de señales (etapa 3): una señal es la misma mientras siga vigente
     signal_key = Column(String(120), nullable=True, index=True)   # estrategia|venta|compra|acción
-    first_seen = Column(DateTime(timezone=True), nullable=True)
-    last_seen = Column(DateTime(timezone=True), nullable=True)
+    first_seen = Column(UTCDateTime(), nullable=True)
+    last_seen = Column(UTCDateTime(), nullable=True)
     net_profit_pct = Column(Float, nullable=True)                 # ganancia neta estimada (%)
     confirmation = Column(String(30), nullable=True)              # 'DEMORA_20MIN' | 'TIEMPO_REAL'
     details = Column(JSON, nullable=True)
@@ -110,7 +111,7 @@ class MacroIndicator(Base):
     name = Column(String(40), index=True, nullable=False) # 'IPC', 'CER', 'TAMAR', 'DOLAR_OFICIAL', 'DOLAR_MEP', 'DOLAR_CCL'
     value = Column(Numeric(14, 4), nullable=False)
     source = Column(String(60), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_macro_date_name", "date", "name", unique=True),
@@ -129,7 +130,7 @@ class BookQuote(Base):
     __tablename__ = "book_quotes"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc), index=True)
     source = Column(String(20), nullable=False)          # 'BYMA', 'BULLMARKET'
     symbol = Column(String(20), nullable=False)          # especie: AL30, AL30D, AL30C
     base_ticker = Column(String(20), nullable=False, index=True)  # AL30 para las tres especies
@@ -166,7 +167,7 @@ class ReferenceBond(Base):
 
     ticker_base = Column(String(20), primary_key=True)
     source = Column(String(30), nullable=False, default="COMPARARBONOS")
-    fetched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    fetched_at = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc))
     market_date = Column(Date, nullable=True)            # rueda a la que corresponden los datos
     settlement_date = Column(Date, nullable=True)        # liquidación que usa la fuente (24hs)
     tipo = Column(String(30), nullable=True)
@@ -192,5 +193,25 @@ class UserSetting(Base):
 
     key = Column(String(60), primary_key=True)
     value = Column(JSON, nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
+    updated_at = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
+
+
+class Alert(Base):
+    """
+    Historial de alertas del dashboard (y de las notificaciones de Windows): oportunidades
+    nuevas o confirmadas en tiempo real, sesión de Bull Market vencida, fuente caída/recuperada.
+    """
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc), index=True)
+    kind = Column(String(30), nullable=False)        # OPORTUNIDAD, CONFIRMADA, SESION_VENCIDA, FUENTE_CAIDA, FUENTE_OK, PRUEBA
+    severity = Column(String(10), nullable=False)    # OPORTUNIDAD / AVISO / INFO
+    title = Column(String(160), nullable=False)
+    message = Column(Text, nullable=True)
+    signal_id = Column(Integer, nullable=True)
+    dedupe_key = Column(String(200), nullable=True, index=True)
+    notified = Column(Boolean, default=False)        # se mostró notificación de Windows
+    read = Column(Boolean, default=False)
+

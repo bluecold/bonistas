@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # Los libros de Bull Market solo se usan si la última consulta OK tiene menos de esta antigüedad
     BULLMARKET_MAX_AGE_SECONDS: int = 180
 
+    # Notificaciones de escritorio de Windows (el panel de alertas del dashboard funciona siempre)
+    WINDOWS_NOTIFICATIONS: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 

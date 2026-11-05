@@ -23,6 +23,7 @@ from backend.app.api.routes import (
     market_book_service,
     reference_service,
     market_calendar,
+    check_source_alerts,
 )
 
 # Configuración de Logging
@@ -47,6 +48,8 @@ async def run_market_cycle(db, include_bullmarket: bool = True) -> None:
     await market_book_service.ingest_byma(db)
     if include_bullmarket:
         await market_book_service.ingest_bullmarket(db)
+    check_source_alerts(db)
+    # Las alertas de oportunidades nuevas las dispara el motor (listener de alert_service)
     arbitrage_engine.evaluate_all_strategies(db)
 
 
