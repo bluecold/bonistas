@@ -55,51 +55,51 @@
 
     <!-- Top Navigation Bar -->
     <header class="border-b border-brand-border bg-brand-card/95 backdrop-blur-md sticky top-0 z-40">
-        <div class="max-w-[1720px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-4">
+        <div class="max-w-[1720px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-3 sm:gap-4">
             <!-- Brand & Status (clic: guía de uso) -->
-            <div class="flex items-center gap-3 cursor-pointer group" onclick="openGuide()" title="Guía de uso: qué hace la app y cómo usarla">
-                <div class="relative h-10 w-10 rounded-xl group-hover:scale-105 transition bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+            <div class="flex items-center gap-3 cursor-pointer group shrink-0" onclick="openGuide()" title="Guía de uso: qué hace la app y cómo usarla">
+                <div class="relative h-10 w-10 shrink-0 rounded-xl group-hover:scale-105 transition bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-500/10">
                     <div class="w-full h-full bg-brand-dark rounded-[10px] flex items-center justify-center">
                         <i data-lucide="activity" class="w-5 h-5 text-emerald-400"></i>
                     </div>
                     <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-extrabold flex items-center justify-center border-2 border-brand-card">?</span>
                 </div>
-                <div>
+                <div class="whitespace-nowrap shrink-0">
                     <div class="flex items-center gap-2">
-                        <h1 class="text-base font-extrabold tracking-tight text-white">Bonistas Trading</h1>
-                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono font-semibold">ARBITRAGE v1.1</span>
+                        <h1 class="text-base font-extrabold tracking-tight text-white whitespace-nowrap leading-none">Bonistas Trading</h1>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono font-semibold whitespace-nowrap">ARBITRAGE v1.1</span>
                     </div>
-                    <p class="text-[11px] text-slate-400">Renta Fija & Arbitraje de Curvas Soberanas</p>
+                    <p class="text-[11px] text-slate-400 whitespace-nowrap mt-1 leading-none">Renta Fija & Arbitraje de Curvas Soberanas</p>
                 </div>
             </div>
 
             <!-- Ticker Bar Dólares Financieros -->
-            <div class="hidden xl:flex items-center gap-2 text-xs font-mono">
-                <div class="flex items-center gap-2 bg-brand-elevated/70 px-3 py-1.5 rounded-lg border border-brand-border">
+            <div class="hidden xl:flex items-center gap-2 text-xs font-mono shrink-0">
+                <div class="flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Dólar MEP:</span>
                     <span id="header-mep" class="text-emerald-400 font-bold">$1,581.60</span>
                 </div>
-                <div class="flex items-center gap-2 bg-brand-elevated/70 px-3 py-1.5 rounded-lg border border-brand-border">
+                <div class="flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Dólar CCL:</span>
                     <span id="header-ccl" class="text-cyan-400 font-bold">$1,679.80</span>
                 </div>
-                <div class="flex items-center gap-2 bg-brand-elevated/70 px-3 py-1.5 rounded-lg border border-brand-border">
+                <div class="hidden 2xl:flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Canje C/D:</span>
                     <span id="header-canje" class="text-amber-400 font-bold">+6.21%</span>
                 </div>
-                <div class="flex items-center gap-2 bg-brand-elevated/70 px-3 py-1.5 rounded-lg border border-brand-border">
+                <div class="hidden 2xl:flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Mayorista A3500:</span>
                     <span id="header-oficial" class="text-slate-300 font-bold">$1,547.00</span>
                 </div>
             </div>
 
             <!-- Actions & Status -->
-            <div class="flex items-center gap-2.5">
-                <div id="market-status-badge" title="Consultando estado..." class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20 cursor-help">
-                    <span id="market-status-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
-                    <span id="market-status-text" class="hidden sm:inline">Estado...</span>
+            <div class="flex items-center gap-2 sm:gap-2.5 shrink min-w-0">
+                <div id="market-status-badge" title="Consultando estado..." class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20 cursor-help min-w-0 max-w-[260px] sm:max-w-[340px] md:max-w-[420px] xl:max-w-[500px]">
+                    <span id="market-status-dot" class="w-2 h-2 rounded-full bg-slate-400 shrink-0"></span>
+                    <span id="market-status-text" class="hidden sm:inline truncate">Estado...</span>
                 </div>
-                <div class="relative">
+                <div class="relative shrink-0">
                     <button onclick="toggleAlerts()" id="btn-alerts" title="Alertas" class="relative flex items-center px-2.5 py-1.5 rounded-lg bg-brand-elevated border border-brand-border text-slate-300 hover:text-white transition">
                         <i data-lucide="bell" class="w-4 h-4"></i>
                         <span id="alerts-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold font-mono flex items-center justify-center">0</span>
@@ -122,7 +122,7 @@
                         </div>
                     </div>
                 </div>
-                <button onclick="refreshAllData()" id="btn-refresh" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition shadow-sm active:scale-95">
+                <button onclick="refreshAllData()" id="btn-refresh" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition shadow-sm active:scale-95">
                     <i data-lucide="refresh-cw" id="refresh-icon" class="w-3.5 h-3.5"></i>
                     <span>Actualizar</span>
                 </button>
@@ -1071,22 +1071,30 @@
                 renderBm(bm);
                 let label, tone;
                 if (!st.market.is_working_day) { label = 'Mercado cerrado (no hábil)'; tone = 'slate'; }
-                else if (st.market.polling_active) { label = `Rueda abierta · BYMA ${st.market.opening}-${st.market.closing}`; tone = 'emerald'; }
+                else if (st.market.polling_active) { 
+                    label = (bm && bm.status === 'VENCIDA') 
+                        ? 'Rueda abierta · sesión Bull Market vencida'
+                        : `Rueda abierta · BYMA ${st.market.opening}-${st.market.closing}`; 
+                    tone = (bm && bm.status === 'VENCIDA') ? 'amber' : 'emerald'; 
+                }
                 else { label = `Mercado cerrado · abre ${st.market.opening}`; tone = 'slate'; }
                 if (bm && bm.status === 'ACTIVA') label += ' · Bull Market en vivo';
+                else if (bm && bm.status === 'VENCIDA' && !st.market.polling_active) { label += ' · sesión Bull Market vencida'; tone = 'amber'; }
                 const hol = st.holidays || [];
                 const fmtD = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {weekday: 'short', day: 'numeric', month: 'numeric'});
                 const nextAr = hol.find(h => h.country === 'AR');
-                if (nextAr && (new Date(nextAr.date + 'T12:00:00') - new Date()) / 86400000 <= 7) label += ` · feriado ${fmtD(nextAr.date)}`;
-                if (bm && bm.status === 'VENCIDA') { label += ' · sesión Bull Market vencida'; tone = 'amber'; }
+                if (nextAr && (new Date(nextAr.date + 'T12:00:00') - new Date()) / 86400000 <= 7 && (!bm || bm.status !== 'VENCIDA') && !down.length) {
+                    label += ` · feriado ${fmtD(nextAr.date)}`;
+                }
                 if (down.length) { label += ` · fuente caída: ${down.join(', ')}`; tone = 'amber'; }
                 const tones = {
                     emerald: ['bg-emerald-500/10', 'text-emerald-400', 'border-emerald-500/20', 'bg-emerald-400'],
                     amber: ['bg-amber-500/10', 'text-amber-300', 'border-amber-500/30', 'bg-amber-400'],
                     slate: ['bg-slate-500/10', 'text-slate-400', 'border-slate-500/20', 'bg-slate-400'],
                 };
-                badge.className = `flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border cursor-help ${tones[tone].slice(0, 3).join(' ')}`;
-                dot.className = `w-2 h-2 rounded-full ${tones[tone][3]} ${tone === 'emerald' ? 'animate-pulse' : ''}`;
+                badge.className = `flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border cursor-help min-w-0 max-w-[260px] sm:max-w-[340px] md:max-w-[420px] xl:max-w-[500px] ${tones[tone].slice(0, 3).join(' ')}`;
+                dot.className = `w-2 h-2 rounded-full shrink-0 ${tones[tone][3]} ${tone === 'emerald' ? 'animate-pulse' : ''}`;
+                text.className = 'hidden sm:inline truncate';
                 text.textContent = label;
                 const fmt = iso => iso ? new Date(iso).toLocaleTimeString('es-AR') : 'nunca';
                 badge.title = sources.length
