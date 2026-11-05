@@ -41,6 +41,10 @@ Un punto por bono, con la curva ajustada (punteada). En la tabla lateral, el des
 |---|---|
 | ![Desvíos](docs/screenshots/curva-desvios.jpg) | ![Tasa fija](docs/screenshots/curva-tasa-fija.jpg) |
 
+**Provinciales en dólares**: TIR calculada con flujos de Bruno618 y precios de BYMA. Provincia de Buenos Aires va en su propia serie.
+
+![Provinciales](docs/screenshots/curva-provinciales.jpg)
+
 **Argentina vs región**: Globales argentinos contra soberanos de Latinoamérica y la curva de Treasuries (riesgo país por tramo).
 
 ![Argentina vs región](docs/screenshots/curva-region.jpg)
@@ -138,6 +142,7 @@ Lista completa en [PROJECT_CONTEXT.md §7](PROJECT_CONTEXT.md).
 | Bull Market (sesión del usuario) | Puntas con 5 niveles de profundidad | Tiempo real |
 | [Bonistas.com](https://bonistas.com) | TIR, duration, paridad, valor técnico | — |
 | [CompararBonos](https://compararbonos.com.ar) | Flujos de fondos y especies de cada bono | Diario |
+| [Bruno618](https://bruno618.com/herramientas/flujo-de-fondos-renta-fija) | Cronogramas de provinciales en dólares que CompararBonos no publica | Diario |
 | [API del BCRA](https://www.bcra.gob.ar) | CER, TAMAR, A3500 | Diario |
 | [DolarAPI](https://dolarapi.com) | Dólar MEP, CCL, oficial | — |
 
@@ -173,7 +178,7 @@ backend/
 .\.venv\Scripts\pytest backend/tests -q
 ```
 
-196 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
+211 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
 
 ---
 

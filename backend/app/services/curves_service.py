@@ -93,7 +93,8 @@ GROUPS = [
     ("CER", "Ajustables por CER",
      "TIR real (por encima de la inflación).", "Duration modificada (años)", "TIR real (%)"),
     ("PROVINCIALES_USD", "Provinciales en dólares",
-     "Bonos provinciales y de CABA en dólares.", "Duration modificada (años)", "TIR (%)"),
+     "Bonos provinciales y de CABA en dólares. Provincia de Buenos Aires va aparte (otro escalón de riesgo).",
+     "Duration modificada (años)", "TIR (%)"),
     ("DOLAR_LINKED", "Dollar linked",
      "Ajustan por el dólar oficial (A3500): TIR por encima de la devaluación.", "Días al vencimiento", "TIR (%)"),
     ("TAMAR_DUALES", "TAMAR y duales",
@@ -103,6 +104,8 @@ GROUPS = [
      "El spread contra la curva de Treasuries es el riesgo país por tramo.",
      "Duration modificada (años)", "TIR (%)"),
 ]
+
+PBA_TICKERS = {"BA37D", "BB37D", "BC37D", "BP28", "BPLD", "BPLE"}
 
 REGION_COUNTRIES = {"BR": ("Brasil", "#22c55e"), "MX": ("México", "#ef4444"), "CO": ("Colombia", "#eab308"),
                     "CL": ("Chile", "#3b82f6"), "PE": ("Perú", "#a855f7"), "UY": ("Uruguay", "#14b8a6"),
@@ -228,10 +231,12 @@ def _preferred_species(ref: ReferenceBond) -> List[str]:
 
 
 def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] = None,
-                 book_prices: Optional[Dict[str, float]] = None) -> List[CurveGroup]:
+                 book_prices: Optional[Dict[str, Tuple[float, str]]] = None,
+                 mep_reference: Optional[float] = None) -> List[CurveGroup]:
     """
     `quotes`: ticker -> BondQuoteView (último snapshot de Bonistas, 24hs).
-    `book_prices`: especie -> precio por 100 VN (BYMA, 24hs) para calcular la TIR propia.
+    `book_prices`: especie -> (precio por 100 VN, moneda ARS/MEP/CCL) de BYMA 24hs, para la TIR propia.
+    `mep_reference`: ARS por USD para convertir el precio cuando solo cotiza la especie en pesos.
     """
     from backend.app.services.market_calendar import next_business_day
     from backend.app.services.reference_data_service import ReferenceDataService
@@ -263,23 +268,41 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
             price = q.price_mep if species.endswith("D") and q.price_mep else (q.price_ars or q.price_mep or q.last_price)
             parity = q.parity_percentage
         elif ref.ref_ytm_pct is not None:
-            ytm, md, tem, source = ref.ref_ytm_pct, ref.ref_duration, None, "COMPARARBONOS"
+            # CompararBonos publica duration de Macaulay: se pasa a modificada (MD = Mac / (1 + TIR))
+            mac = ref.ref_duration
+            md = mac / (1 + ref.ref_ytm_pct / 100.0) if mac is not None and ref.ref_ytm_pct > -100 else None
+            ytm, tem, source = ref.ref_ytm_pct, None, "COMPARARBONOS"
             price, parity = None, None
         else:
             ytm = md = tem = price = parity = None
             source = "PROPIO"
-            for s in _preferred_species(ref):
-                if book_prices.get(s):
-                    price, species = book_prices[s], s
-                    break
+            usd_flows = (ref.currency or "").upper() == "USD"
+            candidates = [(s, *book_prices[s]) for s in _preferred_species(ref) if book_prices.get(s)]
+            # Flujos en dólares: precio en dólares (MEP, luego cable); si solo hay pesos, se convierte
+            rank = {"MEP": 0, "CCL": 1, "ARS": 2} if usd_flows else {"ARS": 0, "MEP": 1, "CCL": 2}
+            candidates.sort(key=lambda c: rank.get(c[2], 9))
+            if candidates:
+                species, px, ccy = candidates[0]
+                if usd_flows and ccy == "ARS":
+                    price = px / mep_reference if mep_reference else None
+                    if price:
+                        species = f"{species} ÷ MEP"
+                elif not usd_flows and ccy != "ARS":
+                    price = None
+                else:
+                    price = px
             if price and ref.flows and not ref.flows_cer_adjusted:
                 ytm, md = own_yield(ReferenceDataService.flows_of(ref), price, settlement)
+                if ref.flows_source == "BRUNO618":
+                    source = "PROPIO (flujos Bruno618)"
         if tem is None and ytm is not None and ytm > -100:
             tem = ((1 + ytm / 100.0) ** (1 / 12.0) - 1) * 100.0
 
         label = ref.ticker_base
         if ytm is None:
-            group.excluded.append({"ticker": label, "reason": "sin TIR publicada ni flujos para calcularla"})
+            reason = ("sin precio en BYMA para calcular la TIR" if ref.flows and not price
+                      else "sin TIR publicada ni flujos para calcularla")
+            group.excluded.append({"ticker": label, "reason": reason})
             continue
         if days is not None and days < MIN_DAYS:
             group.excluded.append({"ticker": label, "reason": f"vence en {days} días"})
@@ -312,6 +335,9 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
                 key = label.split("_")[0]
         elif gid == "TAMAR_DUALES":
             key = (ref.tipo or "").upper()
+        elif gid == "PROVINCIALES_USD":
+            # Provincia de Buenos Aires cotiza en otro escalón de riesgo: serie aparte, sin ajuste común
+            key = "PBA" if label in PBA_TICKERS or label.startswith("PBA") else "PROVINCIALES_USD"
         else:
             key = gid
         buckets.setdefault((gid, key), []).append(point)
@@ -323,7 +349,8 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
         ("SOBERANOS_USD", "BOPREAL"): ("BOPREAL (BCRA)", "#f59e0b", "square", False),
         ("TASA_FIJA", "TASA_FIJA"): ("LECAP / BONCAP", "#10b981", "circle", True),
         ("CER", "CER"): ("Bonos CER", "#a78bfa", "circle", True),
-        ("PROVINCIALES_USD", "PROVINCIALES_USD"): ("Provinciales USD", "#f472b6", "circle", True),
+        ("PROVINCIALES_USD", "PROVINCIALES_USD"): ("Provincias y CABA", "#f472b6", "circle", True),
+        ("PROVINCIALES_USD", "PBA"): ("Provincia de Buenos Aires", "#fb923c", "square", False),
         ("DOLAR_LINKED", "DOLAR_LINKED"): ("Dollar linked", "#38bdf8", "circle", True),
         ("TAMAR_DUALES", "TAMAR"): ("TAMAR", "#f59e0b", "circle", False),
         ("TAMAR_DUALES", "DUAL"): ("Duales", "#a78bfa", "diamond", False),

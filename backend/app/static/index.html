@@ -1607,8 +1607,12 @@
                 }
 
                 const money = (v, d) => (v === null || v === undefined) ? '-' : `$${v.toFixed(d)}`;
-                const sourceNote = cfs[0].source === 'COMPARARBONOS'
-                    ? `<tr><td colspan="5" class="px-3 py-2 text-[11px] text-slate-500">Fuente: CompararBonos (flujo total por 100 VN; para CER, ajustado por el CER vigente).</td></tr>`
+                const notes = {
+                    COMPARARBONOS: 'Fuente: CompararBonos (flujo total por 100 VN; para CER, ajustado por el CER vigente).',
+                    BRUNO618: 'Fuente: Bruno618 (cronograma proyectado desde las condiciones de emisión, por 100 VN original). Fechas sin verificar contra una segunda fuente: cerca de un pago no se generan señales CI vs 24hs.',
+                };
+                const sourceNote = notes[cfs[0].source]
+                    ? `<tr><td colspan="5" class="px-3 py-2 text-[11px] text-slate-500">${notes[cfs[0].source]}</td></tr>`
                     : '';
                 tbody.innerHTML = cfs.map((cf, idx) => `
                     <tr class="${idx % 2 === 0 ? 'bg-brand-card' : 'bg-brand-elevated/30'}">

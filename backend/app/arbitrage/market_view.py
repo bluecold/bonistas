@@ -134,6 +134,9 @@ class MarketView:
     mep_reference: Optional[float] = None              # ARS por USD MEP, para dimensionar
     caucion_tna_pct: Optional[float] = None
     flows_by_base: Dict[str, Tuple[str, List[Tuple[date, float]]]] = field(default_factory=dict)
+    # Bonos cuyos flujos vienen de una fuente secundaria (Bruno618): fechas no verificadas contra
+    # una segunda fuente. Cerca de un pago no se emite señal (un error de fecha simularía un desarbitraje).
+    unverified_bases: set = field(default_factory=set)
 
     # ------------------------------------------------------------------ libros
     def book(self, symbol: str, settlement: str) -> Optional[Book]:
@@ -174,6 +177,9 @@ class MarketView:
         info = self.flows_by_base.get(base)
         if info is None:
             return 0.0, "DESCONOCIDO"
+        if base in self.unverified_bases and any(
+                abs((d - after).days) <= UNVERIFIED_FLOW_WINDOW_DAYS for d, _ in info[1]):
+            return 0.0, "DESCONOCIDO"
         flow_ccy, flows = info
         amount = sum(a for d, a in flows if after < d <= upto)
         if amount == 0:
@@ -199,6 +205,9 @@ def _latest_macro(db: Session, name: str) -> Optional[float]:
         select(MacroIndicator).where(MacroIndicator.name == name).order_by(MacroIndicator.date.desc())
     ).scalars().first()
     return float(row.value) if row else None
+
+
+UNVERIFIED_FLOW_WINDOW_DAYS = 30
 
 
 def _flows_for(refs_index: Dict[str, ReferenceBond], base: str,
@@ -265,6 +274,12 @@ def build_market_view(
             refs_index.setdefault(t, ref)
     for base, syms in symbols_by_base.items():
         f = _flows_for(refs_index, base, syms)
+        for t in [base, *syms]:
+            ref = refs_index.get(t)
+            if ref is not None and ref.flows:
+                if ref.flows_source == "BRUNO618" and f is not None and not get_hard_dollar_schedule(hd_base(base)):
+                    view.unverified_bases.add(base)
+                break
         if f is not None:
             view.flows_by_base[base] = f
     return view

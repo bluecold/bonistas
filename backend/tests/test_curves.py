@@ -102,7 +102,7 @@ def test_build_curves_groups_and_exclusions(db):
         "T30A7": q("T30A7", 29.5, 0.37, tem=2.18), "TZX27": q("TZX27", 3.8, 0.62),
         "TX26": q("TX26", 30.0, 0.1),
     }
-    groups = {g.id: g for g in build_curves(db, quotes, today=TODAY, book_prices={"CO32D": 80.0})}
+    groups = {g.id: g for g in build_curves(db, quotes, today=TODAY, book_prices={"CO32D": (80.0, "MEP")})}
 
     sob = {s.name: s for s in groups["SOBERANOS_USD"].series}
     assert [p.ticker for p in sob["Bonares (ley local)"].points] == ["AL29", "AL30"]   # un punto por bono
@@ -131,3 +131,38 @@ def test_api_curves(client):
     assert r.status_code == 200
     groups = r.json()["groups"]
     assert groups and all({"id", "series", "excluded", "x_label"} <= set(g) for g in groups)
+
+
+def test_comparar_duration_is_converted_to_modified(db):
+    db.add(ref("UY_31", "International", ytm=5.0, md=4.2))
+    db.add(ref("UST5Y_30", "Treasury", ytm=4.0, md=3.12))
+    db.commit()
+    region = {s.name: s for s in next(g for g in build_curves(db, {}, today=TODAY) if g.id == "REGION").series}
+    assert region["Uruguay"].points[0].md == pytest.approx(4.2 / 1.05, abs=1e-3)
+
+
+def test_own_yield_uses_usd_price_or_converts_pesos(db):
+    flows = [["2027-11-05", 10.0], ["2028-11-05", 110.0]]
+    db.add_all([
+        ref("PROVA", "Provincial", species=["PROVA", "PRVAD"], flows=flows),
+        ref("PROVB", "Provincial", species=["PROVB"], flows=flows),
+    ])
+    db.commit()
+    prices = {"PROVA": (160000.0, "ARS"), "PRVAD": (100.0, "MEP"), "PROVB": (158500.0, "ARS")}
+    g = next(g for g in build_curves(db, {}, today=TODAY, book_prices=prices, mep_reference=1585.0)
+             if g.id == "PROVINCIALES_USD")
+    pts = {p.ticker: p for s in g.series for p in s.points}
+    assert pts["PROVA"].species == "PRVAD" and pts["PROVA"].ytm == pytest.approx(10.0, abs=0.1)   # par
+    assert pts["PROVB"].species == "PROVB ÷ MEP" and pts["PROVB"].ytm == pytest.approx(10.0, abs=0.1)
+
+
+def test_flows_without_price_reason(db):
+    db.add_all([
+        ref("PROVC", "Provincial", species=["PROVC"], flows=[["2028-11-05", 110.0]]),
+        ref("PROVD", "Provincial", species=["PROVD"], flows=[["2028-11-05", 110.0]]),
+    ])
+    db.commit()
+    g = next(g for g in build_curves(db, {}, today=TODAY, book_prices={"PROVD": (95.0, "MEP")})
+             if g.id == "PROVINCIALES_USD")
+    assert [p.ticker for s in g.series for p in s.points] == ["PROVD"]
+    assert g.excluded == [{"ticker": "PROVC", "reason": "sin precio en BYMA para calcular la TIR"}]

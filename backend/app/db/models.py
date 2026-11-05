@@ -182,6 +182,10 @@ class ReferenceBond(Base):
     ref_duration = Column(Float, nullable=True)
     payment_structure = Column(String(200), nullable=True)
     species = Column(JSON, nullable=False, default=list)
+    # De dónde salen los flujos (COMPARARBONOS o BRUNO618) y, si la fuente lo publica, el detalle
+    # [["2027-01-02", renta, amortización, total, residual], ...]
+    flows_source = Column(String(30), nullable=True)
+    flows_detail = Column(JSON, nullable=True)
 
     def __repr__(self):
         return f"<ReferenceBond {self.ticker_base} ({self.tipo}) {len(self.flows or [])} flujos>"

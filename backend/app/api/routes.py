@@ -341,11 +341,23 @@ def get_bond_cashflows(
             for cf in generate_cashflows(bond.ticker, s_date, bond.maturity_date)
         ]
 
+    source = ref.flows_source or "COMPARARBONOS"
+    if ref.flows_detail:
+        out = []
+        for d, coupon, amort, total, residual in ref.flows_detail:
+            d = date.fromisoformat(d)
+            if d > s_date:
+                out.append(CashFlowItemResponse(
+                    date=d, days_from_settlement=(d - s_date).days, interest_rate=None,
+                    coupon_amount=coupon, amortization_amount=amort, total_cashflow=total,
+                    residual_capital=residual, source=source,
+                ))
+        return out
     return [
         CashFlowItemResponse(
             date=cf.date, days_from_settlement=cf.days_from_settlement,
             interest_rate=None, coupon_amount=None, amortization_amount=None,
-            total_cashflow=cf.total_cashflow, residual_capital=None, source="COMPARARBONOS",
+            total_cashflow=cf.total_cashflow, residual_capital=None, source=source,
         )
         for cf in _reference_cashflows(ref, s_date)
     ]
@@ -770,5 +782,13 @@ def get_curves(db: Session = Depends(get_db)):
     for b in market_book_service.latest_books(db, source="BYMA", settlement="24HS"):
         mid = (b.bid + b.ask) / 2.0 if b.bid and b.ask else b.last
         if mid:
-            prices[b.symbol] = mid
-    return {"groups": [g.to_dict() for g in build_curves(db, quotes, book_prices=prices)]}
+            prices[b.symbol] = (mid, b.currency)
+    mep = None
+    if prices.get("AL30") and prices.get("AL30D"):
+        mep = prices["AL30"][0] / prices["AL30D"][0]
+    if mep is None:
+        row = db.execute(select(MacroIndicator).where(MacroIndicator.name == "DOLAR_BOLSA")
+                         .order_by(MacroIndicator.date.desc())).scalars().first()
+        mep = float(row.value) if row else None
+    groups = build_curves(db, quotes, book_prices=prices, mep_reference=mep)
+    return {"mep_reference": round(mep, 2) if mep else None, "groups": [g.to_dict() for g in groups]}

@@ -324,3 +324,15 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Clic en el logo (badge "?") ⇒ modal con 6 secciones navegables: para qué sirve (con los parámetros actuales del usuario), primeros pasos, herramientas (con botón "Abrir →" a cada pestaña), cómo leer una señal, glosario y fuentes/límites (incluye el aviso de que no es asesoramiento financiero).
 * Se abre sola en la primera visita (`localStorage.guideSeen`); se cierra con Esc, clic afuera o la X.
 
+### Provinciales: cronogramas de Bruno618 (2026-11-05)
+
+* `data/bruno618_client.py`: lee una vez por día (con la referencia de las 10:15) las fichas `bruno618.com/herramientas/flujo-de-fondos-renta-fija/<ticker>` de 18 provinciales (HTML renderizado en el servidor; robots.txt lo permite). Pausa de 0,7 s entre pedidos.
+* Validaciones por bono: total = renta + amortización, residual encadenado, residual final 0, moneda explícita. Si falla, el bono se descarta con el motivo (no se usan datos dudosos).
+* `ReferenceDataService.merge_provincial_schedules`: CompararBonos manda; Bruno618 solo completa los que no tienen flujos (10) o agrega los que faltan (6). Solo bonos en dólares. Nuevas columnas `reference_bonds.flows_source` y `flows_detail` (renta/amort/residual; la ficha de pagos los muestra).
+* Control cruzado pago por pago donde hay dos fuentes: BB37D coincide (máx. 0,005 por 100 VN); **BA37D difiere 21 días en todas las fechas** (1/3 vs 22/3) con montos iguales: se mantiene CompararBonos y se registra el desvío.
+* Resguardo: como las fechas de Bruno618 no están verificadas, en bonos con esa fuente el estado de cupón es DESCONOCIDO (sin señal CI vs 24hs) si hay un pago a ±30 días.
+* Curvas: TIR propia con precio de la especie en dólares (MEP, luego cable) o, si solo cotiza en pesos, precio ARS ÷ MEP implícito del AL30. Validado contra CompararBonos: BA37D 14,56% vs 14,84%, BB37D 14,94% vs 15,04%.
+* Corrección: la duration de CompararBonos es de **Macaulay**; ahora se convierte a modificada (afectaba Argentina vs región y bonos sin dato de Bonistas).
+* Curva provincial: 2 → 13 bonos. Provincia de Buenos Aires (BA37D/BB37D/BC37D) en serie aparte, fuera del ajuste (otro escalón de riesgo).
+* Sin precio en BYMA (excluidos con motivo): BP28, BPLD, BPLE, CO27D (en BYMA figura como CO2D7, en pesos), PUL26.
+

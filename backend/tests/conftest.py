@@ -136,6 +136,15 @@ def _install_offline_sources(monkeypatch):
 
     monkeypatch.setattr(BullMarketClient, "fetch_raw", fake_bm_raw)
 
+    # --- Bruno618 (cronogramas de provinciales): ficha real recortada de CO32
+    from backend.app.data.bruno618_client import Bruno618Client, parse_schedule
+    co32_html = (FIXTURES / "bruno618_co32.html").read_text(encoding="utf-8")
+
+    async def fake_bruno_schedules(self, tickers=None):
+        return {"CO32": parse_schedule("CO32", co32_html)}, {}
+
+    monkeypatch.setattr(Bruno618Client, "fetch_schedules", fake_bruno_schedules)
+
     # Red de seguridad: aunque algún test construya un WindowsToastNotifier, no lanza PowerShell
     from backend.app.services.notifier import WindowsToastNotifier
     monkeypatch.setattr(WindowsToastNotifier, "send", lambda self, title, message, url=None: False)
