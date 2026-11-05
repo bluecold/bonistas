@@ -36,6 +36,22 @@ logger = logging.getLogger("bonistas_trading")
 scheduler = AsyncIOScheduler(timezone=ART)
 
 
+async def refresh_bullmarket_cashflows(db, force: bool = False) -> None:
+    """Una vez por día, con la sesión de Bull Market activa: cronogramas de pago de los bonos."""
+    from datetime import date as _date
+    from backend.app.api.routes import bullmarket_session
+    if bullmarket_session.status != "ACTIVA":
+        return
+    if not force and reference_service.bullmarket_cashflows_day == _date.today():
+        return
+    try:
+        await reference_service.apply_bullmarket_cashflows(db, bullmarket_session.get_cookie())
+    except Exception as e:
+        db.rollback()
+        reference_service.bullmarket_cashflows_day = _date.today()   # no reintentar en cada ciclo
+        logger.warning(f"Cronogramas de Bull Market: {e}")
+
+
 async def run_market_cycle(db, include_bullmarket: bool = True) -> None:
     """
     Un ciclo completo: analítica (Bonistas), libro de BYMA, libro de Bull Market en tiempo
@@ -48,6 +64,7 @@ async def run_market_cycle(db, include_bullmarket: bool = True) -> None:
     await market_book_service.ingest_byma(db)
     if include_bullmarket:
         await market_book_service.ingest_bullmarket(db)
+        await refresh_bullmarket_cashflows(db)
     check_source_alerts(db)
     # Las alertas de oportunidades nuevas las dispara el motor (listener de alert_service)
     arbitrage_engine.evaluate_all_strategies(db)

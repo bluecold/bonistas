@@ -361,3 +361,12 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Ejemplo real: lunes 9/11/2026 feriado ⇒ el viernes 6/11, 24hs liquida el martes 10/11 (4 días de caución). Los "días no laborables con fin turístico" (ej. 7/12) se tratan como sin liquidación.
 * `/status` informa `settlement_24hs` y los próximos feriados; el indicador del encabezado avisa un feriado dentro de 7 días y el tooltip los lista.
 
+### Cronogramas de pago desde Bull Market (2026-11-05)
+
+* `bullmarket_client.fetch_cashflows`: `POST /Clients/FixedIncome/GetProductsCashflowTablesAndSum` con `{"symbolQuantityList":[{"symbol":..,"quantity":100}]}` (montos por 100 VN; pedidos de a 40 bonos). Trae fecha, renta, amortización, total, residual, `isPastPayment`, `paymentsCurrency` (ARS/MEP/CCL) y ley. En CER, montos estimados con el CER vigente. Usa la sesión del panel; sesión vencida ⇒ mismo manejo que las cotizaciones.
+* Una vez por día, la primera vez que la sesión está ACTIVA (ciclo de mercado, al guardar la cookie o manual): `ReferenceDataService.apply_bullmarket_cashflows`.
+  * Bull Market entra al consenso de provinciales (ranking: CompararBonos 4 > Bull Market 3 > Mercados Argentina 2 > Bruno618 1).
+  * `add_imminent_flows`: agrega a cualquier bono de la referencia los pagos con corte en los próximos 15 días que la fuente principal ya no lista (caso TX28). Se registra en `flows_check.pagos_proximos_bullmarket`.
+* Resultado real: 79 cronogramas; 14 provinciales verificados (se suman BC37D, desempate MA + Bull Market contra Bruno618, y SJO35); NDG34 agregado (solo Bull Market, sin verificar); pagos próximos agregados: TX28 (9/11) y BAF27 (13/11). BDC33: Bull Market redondea amortizaciones 33/33/34 vs 33,33/33,33/33,34 (gana la mayoría; fechas iguales).
+* La sesión se mantuvo activa más de 30 minutos con el polling de 60 s.
+

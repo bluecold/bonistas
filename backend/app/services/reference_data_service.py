@@ -27,7 +27,8 @@ from backend.app.services.source_health import source_health
 logger = logging.getLogger(__name__)
 
 
-SOURCE_RANK = {"COMPARARBONOS": 3, "MERCADOSARG": 2, "BRUNO618": 1}
+SOURCE_RANK = {"COMPARARBONOS": 4, "BULLMARKET": 3, "MERCADOSARG": 2, "BRUNO618": 1}
+IMMINENT_WINDOW_DAYS = 15
 
 
 def schedules_agree(a: List[Tuple[date, float]], b: List[Tuple[date, float]],
@@ -58,6 +59,10 @@ class ReferenceDataService:
         self.comparar = comparar or CompararBonosClient()
         self.bruno = bruno or Bruno618Client()
         self.mercados = mercados or MercadosArgentinaClient()
+        # Cronogramas secundarios del día (para recombinar cuando llegan los de Bull Market)
+        self._secondary: Dict[str, Dict[str, ProvincialSchedule]] = {}
+        self._secondary_day: Optional[date] = None
+        self.bullmarket_cashflows_day: Optional[date] = None
         self.bcra = bcra or BcraClient()
         self.macro = macro or MacroDataConnector()
 
@@ -171,6 +176,78 @@ class ReferenceDataService:
         return report
 
     @staticmethod
+    def add_imminent_flows(db: Session, schedules: Dict[str, ProvincialSchedule],
+                           today: Optional[date] = None) -> Dict[str, Any]:
+        """
+        Agrega a la referencia los pagos con corte en los próximos IMMINENT_WINDOW_DAYS días que
+        la fuente principal ya no lista (CompararBonos omite un pago ya cortado para SU
+        liquidación, como TX28 el 05/11/2026). Fuente: cronogramas de Bull Market.
+        """
+        from backend.app.services.market_calendar import ex_date
+        today = today or date.today()
+        refs = list(db.execute(select(ReferenceBond)).scalars())
+        by_symbol: Dict[str, ReferenceBond] = {}
+        for r in refs:
+            for t in [r.ticker_base, *(r.species or [])]:
+                by_symbol.setdefault(t, r)
+        added: Dict[str, List[str]] = {}
+        for sym, sch in schedules.items():
+            ref = by_symbol.get(sym)
+            if ref is None:
+                continue
+            ref_usd = (ref.currency or "").upper() == "USD"
+            if ref_usd != (sch.currency == "USD"):
+                continue                      # monedas distintas: no se mezclan montos
+            existing = [date.fromisoformat(d) for d, _ in (ref.flows or [])]
+            new_flows = list(ref.flows or [])
+            for row in sch.rows:
+                if not (today <= ex_date(row.date) and (row.date - today).days <= IMMINENT_WINDOW_DAYS):
+                    continue
+                if any(abs((row.date - d).days) <= 3 for d in existing):
+                    continue
+                new_flows.append([row.date.isoformat(), row.total])
+                added.setdefault(ref.ticker_base, []).append(row.date.isoformat())
+            if ref.ticker_base in added:
+                ref.flows = sorted(new_flows)
+                check = dict(ref.flows_check or {})
+                check["pagos_proximos_bullmarket"] = added[ref.ticker_base]
+                ref.flows_check = check
+        db.commit()
+        return added
+
+    async def apply_bullmarket_cashflows(self, db: Session, cookie: str) -> Dict[str, Any]:
+        """
+        Con la sesión de Bull Market activa (una vez por día): cronogramas de todos los bonos de la
+        referencia y de los provinciales. Suma Bull Market al consenso de provinciales y agrega
+        los pagos próximos que falten.
+        """
+        from backend.app.data import bullmarket_client as bmc
+        from backend.app.data.bruno618_client import PROVINCIAL_TICKERS as BRUNO_TICKERS
+        from backend.app.data.mercados_argentina_client import PROVINCIAL_TICKERS as MA_TICKERS
+        today = date.today()
+        symbols = [r.ticker_base for r in db.execute(select(ReferenceBond)).scalars()]
+        provincial = list(dict.fromkeys([*BRUNO_TICKERS, *MA_TICKERS]))
+        schedules, errors = await bmc.fetch_cashflows(cookie, symbols + provincial, after=today)
+        source_health.success("BULLMARKET_CRONOGRAMAS", schedules=len(schedules), errors=len(errors))
+        if self._secondary_day != today or not any(k in self._secondary for k in ("BRUNO618", "MERCADOSARG")):
+            sec: Dict[str, Dict[str, ProvincialSchedule]] = {}
+            for name, fetch in (("BRUNO618", lambda: self.bruno.fetch_schedules()),
+                                ("MERCADOSARG", lambda: self.mercados.fetch_schedules(after=today))):
+                try:
+                    sec[name] = (await fetch())[0]
+                except Exception as e:
+                    logger.warning(f"{name}: {e}")
+            self._secondary, self._secondary_day = sec, today
+        self._secondary["BULLMARKET"] = {t: s for t, s in schedules.items() if t in provincial}
+        merged = self.merge_provincial_schedules(db, self._secondary, today=today)
+        merged["imminent"] = self.add_imminent_flows(db, schedules, today=today)
+        merged["bullmarket_schedules"] = len(schedules)
+        merged["bullmarket_errors"] = errors
+        self.bullmarket_cashflows_day = today
+        logger.info(f"Cronogramas Bull Market: {len(schedules)} bonos; pagos próximos agregados: {merged['imminent']}")
+        return merged
+
+    @staticmethod
     def store_macro(db: Session, items: Dict[str, MacroIndicatorCreate]) -> int:
         for name, item in items.items():
             existing = db.execute(
@@ -204,6 +281,8 @@ class ReferenceDataService:
 
         if "reference_bonds" in result:
             secondary: Dict[str, Dict[str, ProvincialSchedule]] = {}
+            if self._secondary_day == date.today() and "BULLMARKET" in self._secondary:
+                secondary["BULLMARKET"] = self._secondary["BULLMARKET"]   # ya obtenidos hoy con la sesión
             errors: Dict[str, Dict[str, str]] = {}
             fetchers = (("BRUNO618", lambda: self.bruno.fetch_schedules()),
                         ("MERCADOSARG", lambda: self.mercados.fetch_schedules(after=date.today())))
@@ -219,8 +298,11 @@ class ReferenceDataService:
                     source_health.failure(name, e)
                     logger.error(f"{name}: {e}")
                     errors[name] = {"*": str(e)[:200]}
+            self._secondary, self._secondary_day = dict(secondary), date.today()
             try:
                 merged = self.merge_provincial_schedules(db, secondary)
+                if "BULLMARKET" in secondary:
+                    merged["imminent"] = self.add_imminent_flows(db, secondary["BULLMARKET"])
                 result["provincial_schedules"] = dict(merged, errors=errors)
                 if merged["disagree"]:
                     logger.warning(f"Cronogramas provinciales con fuentes en desacuerdo: {merged['disagree']}")

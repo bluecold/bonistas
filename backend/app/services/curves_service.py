@@ -314,7 +314,7 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
                 if price and ref.flows and not ref.flows_cer_adjusted:
                     ytm, md = own_yield(ReferenceDataService.flows_of(ref), price, settlement)
                     if ref.flows_source and ref.flows_source != "COMPARARBONOS":
-                        names = {"BRUNO618": "Bruno618", "MERCADOSARG": "Mercados Argentina",
+                        names = {"BRUNO618": "Bruno618", "MERCADOSARG": "Mercados Argentina", "BULLMARKET": "Bull Market",
                                  "COMPARARBONOS": "CompararBonos"}
                         agree = (ref.flows_check or {}).get("fuentes_coinciden") or [ref.flows_source]
                         src_txt = " + ".join(names.get(n, n) for n in agree)

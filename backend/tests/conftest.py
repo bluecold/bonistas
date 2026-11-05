@@ -136,6 +136,19 @@ def _install_offline_sources(monkeypatch):
 
     monkeypatch.setattr(BullMarketClient, "fetch_raw", fake_bm_raw)
 
+    # Cronogramas de Bull Market (respuesta real recortada: NDG34, TX28, BC37D, CO32, AL30)
+    from backend.app.data import bullmarket_client as bmc
+    bm_cf = _load("bullmarket_cashflows.json")
+
+    async def fake_bm_cashflows(cookie, symbols, after, **kw):
+        if cookie != TEST_BM_COOKIE:
+            raise SessionExpiredError("Sesión de Bull Market vencida o inválida (HTTP 302).")
+        wanted = {s.upper() for s in symbols}
+        rows = [r for r in bm_cf["resultCashflowTable"] if r["symbol"] in wanted]
+        return bmc.parse_cashflows({"resultCashflowTable": rows}, after)
+
+    monkeypatch.setattr(bmc, "fetch_cashflows", fake_bm_cashflows)
+
     # --- Bruno618 (cronogramas de provinciales): ficha real recortada de CO32
     from backend.app.data.bruno618_client import Bruno618Client, parse_schedule
     co32_html = (FIXTURES / "bruno618_co32.html").read_text(encoding="utf-8")

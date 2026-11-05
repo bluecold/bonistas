@@ -171,3 +171,84 @@ class BullMarketClient:
             term = SETTLEMENT_TO_TERM[st]
             rows += parse_stock_prices(await self.fetch_raw(cookie, term, index), term)
         return rows
+
+
+# ---------------------------------------------------------------------------
+# Cronogramas de pago (renta fija): un pedido devuelve los flujos de varios bonos.
+# POST /Clients/FixedIncome/GetProductsCashflowTablesAndSum
+#   {"symbolQuantityList": [{"symbol": "NDG34", "quantity": 100}, ...]}
+# Con quantity = 100 los montos salen por 100 VN. Cada fila: paymentDate, rentaInteres,
+# amortizacionCapital, ryA (total), residualValue (después del pago), isPastPayment,
+# paymentsCurrency (ARS / MEP / CCL), law. En bonos CER los montos están ajustados por el CER vigente.
+# ---------------------------------------------------------------------------
+CASHFLOW_PATH = "/Clients/FixedIncome/GetProductsCashflowTablesAndSum"
+CASHFLOW_CHUNK = 40
+
+
+def parse_cashflows(raw: Dict[str, Any], after) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    """
+    Devuelve ({symbol: ProvincialSchedule con los pagos posteriores a `after`}, {symbol: error}).
+    Validaciones: total = renta + amortización; en bonos en dólares, amortizaciones futuras <= 100.
+    """
+    from datetime import date as _date
+    from backend.app.data.bruno618_client import ProvincialSchedule, ScheduleRow
+    rows_by: Dict[str, List[Dict[str, Any]]] = {}
+    for r in (raw or {}).get("resultCashflowTable") or []:
+        if isinstance(r, dict) and r.get("symbol"):
+            rows_by.setdefault(str(r["symbol"]).upper(), []).append(r)
+    ok: Dict[str, Any] = {}
+    errors: Dict[str, str] = {}
+    for sym, rows in rows_by.items():
+        try:
+            future = []
+            for r in rows:
+                d = _date.fromisoformat(str(r.get("paymentDate", ""))[:10])
+                if r.get("isPastPayment") or d <= after:
+                    continue
+                renta, amort = float(r.get("rentaInteres") or 0), float(r.get("amortizacionCapital") or 0)
+                total, resid = float(r.get("ryA") or 0), float(r.get("residualValue") or 0)
+                if abs(renta + amort - total) > 0.02:
+                    raise ValueError(f"total ≠ renta + amortización el {d}")
+                future.append(ScheduleRow(d, renta, amort, total, resid))
+            if not future:
+                continue
+            future.sort(key=lambda x: x.date)
+            pay_ccy = str(rows[0].get("paymentsCurrency") or rows[0].get("currency") or "").upper()
+            currency = "ARS" if pay_ccy == "ARS" else "USD"
+            if currency == "USD" and sum(x.amortization for x in future) > 100.02:
+                raise ValueError("amortizaciones futuras > 100")
+            sch = ProvincialSchedule(ticker=sym, currency=currency, data_date=None, rows=future)
+            sch.payment_currency = pay_ccy           # ARS / MEP / CCL (dato extra, no forma parte del dataclass)
+            ok[sym] = sch
+        except (TypeError, ValueError) as e:
+            errors[sym] = str(e)[:200]
+    return ok, errors
+
+
+async def fetch_cashflows(cookie: str, symbols: List[str], after, base_url: str = BASE_URL,
+                          timeout: float = 40.0) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    if not cookie:
+        raise SessionExpiredError("No hay cookie de sesión de Bull Market configurada.")
+    headers = dict(HEADERS, Cookie=cookie, **{"Content-Type": "application/json",
+                                              "Referer": f"{base_url}/Clients/FixedIncome"})
+    ok: Dict[str, Any] = {}
+    errors: Dict[str, str] = {}
+    uniq = list(dict.fromkeys(s.upper() for s in symbols if s))
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+        for i in range(0, len(uniq), CASHFLOW_CHUNK):
+            chunk = uniq[i:i + CASHFLOW_CHUNK]
+            body = {"symbolQuantityList": [{"symbol": s, "quantity": 100} for s in chunk]}
+            try:
+                resp = await client.post(f"{base_url}{CASHFLOW_PATH}", headers=headers, json=body)
+            except httpx.HTTPError as e:
+                raise BullMarketError(f"Error de red con Bull Market: {e.__class__.__name__}") from e
+            classify_response(resp.status_code, resp.headers.get("content-type", ""), resp.text)
+            try:
+                data = resp.json()
+            except ValueError as e:
+                raise SessionExpiredError("Respuesta de cronogramas no es JSON: probable sesión vencida.") from e
+            got, errs = parse_cashflows(data, after)
+            ok.update(got)
+            errors.update(errs)
+    return ok, errors
+

@@ -247,6 +247,13 @@ async def set_bullmarket_session(req: BullMarketCookieRequest, db: Session = Dep
     status = bullmarket_session.to_dict()
     status["test"] = {k: v for k, v in result.items() if k in ("rows", "books", "error")}
     if status["status"] == "ACTIVA":
+        try:
+            if reference_service.bullmarket_cashflows_day != date.today():
+                status["cashflows"] = {k: v for k, v in (await reference_service.apply_bullmarket_cashflows(
+                    db, bullmarket_session.get_cookie())).items() if k in ("verified", "imminent", "bullmarket_schedules")}
+        except Exception as e:
+            db.rollback()
+            status["cashflows_error"] = str(e)[:200]
         arbitrage_engine.evaluate_all_strategies(db)
     return status
 
