@@ -155,3 +155,15 @@ def test_refresh_reports_both_sources(client):
     r = client.post("/api/v1/reference/refresh").json()
     ps = r["provincial_schedules"]
     assert "SJO35" in ps["added"] and "CO32" in ps["unverified"] + ps["verified"]
+
+
+def test_reference_without_secondary_schedules_is_stale(db):
+    from datetime import datetime, timezone
+    from backend.main import reference_is_stale
+    db.add(ReferenceBond(ticker_base="CO32", tipo="Provincial", currency="USD", species=["CO32D"], flows=[],
+                         fetched_at=datetime.now(timezone.utc)))
+    db.commit()
+    assert reference_is_stale(db)                     # del día, pero sin cronogramas secundarios
+    db.get(ReferenceBond, "CO32").flows_source = "MERCADOSARG"
+    db.commit()
+    assert not reference_is_stale(db)

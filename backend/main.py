@@ -81,13 +81,24 @@ async def scheduled_reference_job():
 
 
 def reference_is_stale(db) -> bool:
+    """
+    La referencia se vuelve a descargar si no es del día o si quedó incompleta: por ejemplo, si se
+    descargó con una versión anterior sin los cronogramas de provinciales (Bruno618 / Mercados
+    Argentina), sin esperar a la actualización programada del día siguiente.
+    """
     last = db.execute(select(func.max(ReferenceBond.fetched_at))).scalar()
     if last is None:
         return True
     if last.tzinfo is None:
         from datetime import timezone
         last = last.replace(tzinfo=timezone.utc)
-    return last.astimezone(ART).date() < datetime.now(ART).date()
+    if last.astimezone(ART).date() < datetime.now(ART).date():
+        return True
+    has_secondary = db.execute(
+        select(func.count()).select_from(ReferenceBond)
+        .where(ReferenceBond.flows_source.in_(("BRUNO618", "MERCADOSARG")))
+    ).scalar()
+    return not has_secondary
 
 
 @asynccontextmanager
