@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 from backend.app.arbitrage.ci_24hs import CiOpportunity, detect_ci_vs_24hs
 from backend.app.arbitrage.fx_implied import FxRoundTrip, best_round_trips, implied_fx_quotes
 from backend.app.arbitrage.market_view import MarketView, build_market_view
+from backend.app.config import settings
+from backend.app.services.market_book_service import MarketBookService
 from backend.app.arbitrage.ratios import PairRatio, compute_pair_ratios, ytm_spread_stats
 from backend.app.arbitrage.strategies import (
     ArbitrageStrategies,
@@ -42,7 +44,8 @@ LAW_ROTATE_TO_NY_MAX_RATIO = 1.01   # prima NY <= 1%: cobertura legal "gratis"
 LAW_ROTATE_TO_ARG_MIN_RATIO = 1.12
 LAW_ROTATE_TO_ARG_MIN_Z = 1.5
 
-CONFIRMATION_BY_SOURCE = {"BYMA": "DEMORA_20MIN", "BULLMARKET": "TIEMPO_REAL"}
+# TIEMPO_REAL: todas las patas con puntas de Bull Market. PARCIAL: alguna pata con BYMA (demora).
+CONFIRMATION_BY_SOURCE = {"BYMA": "DEMORA_20MIN", "BULLMARKET": "TIEMPO_REAL", "MIXTO": "PARCIAL"}
 
 
 @dataclass
@@ -61,9 +64,12 @@ def signal_key(s: ArbitrageSignalCreate) -> str:
 
 class ArbitrageEngine:
     def __init__(self, ingestion_service: Optional[IngestionService] = None,
-                 sources: tuple = ("BYMA",)):
+                 sources: tuple = ("BULLMARKET", "BYMA"),
+                 book_service: Optional[MarketBookService] = None):
         self.ingestion = ingestion_service or IngestionService()
-        self.sources = sources          # prioridad de fuentes de puntas (etapa 4: BULLMARKET primero)
+        self.sources = sources          # prioridad de fuentes de puntas: Bull Market (tiempo real) primero
+        self.book_service = book_service or MarketBookService()
+        self.last_view: Optional[MarketView] = None
         self.last_new_signals: List[ArbitrageSignal] = []
         self.last_expired_count = 0
 
@@ -71,7 +77,11 @@ class ArbitrageEngine:
     def scan(self, db: Session, params: Optional[TradingParams] = None,
              now: Optional[datetime] = None) -> ScanResult:
         params = params or get_params(db)
-        view = build_market_view(db, sources=self.sources, now=now)
+        view = build_market_view(
+            db, sources=self.sources, now=now, book_service=self.book_service,
+            live_max_age={"BULLMARKET": settings.BULLMARKET_MAX_AGE_SECONDS},
+        )
+        self.last_view = view
         result = ScanResult(view=view, params=params)
         result.ci_24hs = detect_ci_vs_24hs(view, params)
         result.fx_quotes = implied_fx_quotes(view, params)
@@ -106,7 +116,7 @@ class ArbitrageEngine:
         return out
 
     @staticmethod
-    def _signals_from_fx(trips: List[FxRoundTrip], source: str) -> List[ArbitrageSignalCreate]:
+    def _signals_from_fx(trips: List[FxRoundTrip]) -> List[ArbitrageSignalCreate]:
         out = []
         for t in trips:
             if not t.signal:
@@ -119,7 +129,7 @@ class ArbitrageEngine:
                 metric_value=Decimal(str(t.net_pct)),
                 action_recommended=f"COMPRAR_{t.kind}_CON_{t.buy_with}_VENDER_CON_{t.sell_with}",
                 net_profit_pct=t.net_pct,
-                confirmation=CONFIRMATION_BY_SOURCE.get(source, source),
+                confirmation=CONFIRMATION_BY_SOURCE.get(t.source, t.source),
                 details=t.to_dict(),
                 notes=(
                     f"Comprar dólar {t.kind} con {t.buy_with} a ${t.buy_usd_rate:,.2f} y venderlo con "
@@ -130,7 +140,7 @@ class ArbitrageEngine:
         return out
 
     @staticmethod
-    def _signals_from_law_ratios(ratios: List[PairRatio], source: str) -> List[ArbitrageSignalCreate]:
+    def _signals_from_law_ratios(ratios: List[PairRatio]) -> List[ArbitrageSignalCreate]:
         out = []
         for r in ratios:
             if r.kind != "LEY" or r.settlement != "24HS" or not r.mid_ratio:
@@ -143,7 +153,7 @@ class ArbitrageEngine:
                 metric_value=Decimal(str(r.mid_ratio)),
                 historical_mean=Decimal(str(r.hist_mean)) if r.hist_mean else None,
                 std_deviations=Decimal(str(r.z_score)) if r.z_score is not None else None,
-                confirmation=CONFIRMATION_BY_SOURCE.get(source, source), details=r.to_dict(),
+                confirmation=CONFIRMATION_BY_SOURCE.get(r.source, r.source), details=r.to_dict(),
             )
             if cost_to_ny is not None and cost_to_ny <= LAW_ROTATE_TO_NY_MAX_RATIO:
                 out.append(ArbitrageSignalCreate(
@@ -168,15 +178,14 @@ class ArbitrageEngine:
     def evaluate_all_strategies(self, db: Session, now: Optional[datetime] = None) -> List[ArbitrageSignal]:
         """Corre todos los detectores y concilia las señales con la base. Devuelve las activas."""
         scan = self.scan(db, now=now)
-        main_source = self.sources[0]
 
         quotes = self.ingestion.get_latest_quotes(db)
         quotes_dict: Dict[str, BondQuoteView] = {q.ticker: q for q in quotes}
 
         generated: List[ArbitrageSignalCreate] = []
         generated += self._signals_from_ci(scan.ci_24hs)
-        generated += self._signals_from_fx(scan.fx_round_trips, main_source)
-        generated += self._signals_from_law_ratios(scan.ratios, main_source)
+        generated += self._signals_from_fx(scan.fx_round_trips)
+        generated += self._signals_from_law_ratios(scan.ratios)
 
         # Pares AL/GD sin puntas de BYMA: se evalúan con la analítica de Bonistas (precio MEP)
         pairs_with_books = {(r.a, r.b) for r in scan.ratios if r.kind == "LEY"}
@@ -259,10 +268,20 @@ class ArbitrageEngine:
         return float(row.value) if row else None
 
     # ------------------------------------------------------------------ Command Center
+    @staticmethod
+    def book_source_summary(view: MarketView) -> Dict[str, Any]:
+        """Cuántos libros de la vista vienen de cada fuente, y cuál es la principal."""
+        counts: Dict[str, int] = {}
+        for b in view.books.values():
+            counts[b.source] = counts.get(b.source, 0) + 1
+        principal = max(counts, key=counts.get) if counts else None
+        return {"counts": counts, "principal": principal}
+
     def get_arbitrage_command_center(self, db: Session) -> Dict[str, Any]:
         """Matriz del Command Center con semáforos (GREEN = oportunidad, YELLOW = observación)."""
         scan = self.scan(db)
         quotes_dict = {q.ticker: q for q in self.ingestion.get_latest_quotes(db)}
+        book_sources = self.book_source_summary(scan.view)
 
         active_signals = db.execute(
             select(ArbitrageSignal)
@@ -332,8 +351,9 @@ class ArbitrageEngine:
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "params": scan.params.to_dict(),
-            "data_source": self.sources[0],
-            "confirmation": CONFIRMATION_BY_SOURCE.get(self.sources[0]),
+            "data_source": book_sources.get("principal"),
+            "confirmation": CONFIRMATION_BY_SOURCE.get(book_sources.get("principal")),
+            "book_sources": book_sources,
             "active_signals_count": len(active_signals),
             "active_signals": [
                 {

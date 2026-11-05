@@ -1,3 +1,4 @@
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -43,13 +44,15 @@ from backend.app.services.market_book_service import MarketBookService
 from backend.app.services.reference_data_service import ReferenceDataService
 from backend.app.services.market_calendar import MarketCalendar, next_business_day
 from backend.app.services.source_health import source_health
+from backend.app.services.bullmarket_session import InvalidCookieError
 from backend.app.services.trading_settings import get_params, update_params
 from backend.app.config import settings
 
 router = APIRouter()
 ingestion_service = IngestionService()
-arbitrage_engine = ArbitrageEngine(ingestion_service)
 market_book_service = MarketBookService()
+bullmarket_session = market_book_service.bm_session
+arbitrage_engine = ArbitrageEngine(ingestion_service, book_service=market_book_service)
 reference_service = ReferenceDataService()
 market_calendar = MarketCalendar()
 
@@ -113,7 +116,8 @@ def get_macro_indicators(db: Session = Depends(get_db)):
 async def trigger_ingestion(db: Session = Depends(get_db)):
     """
     Sincronización manual inmediata (ignora el horario de mercado): analítica de Bonistas,
-    dólares de referencia y libro de BYMA (puntas CI y 24hs) con la caución a 1 día.
+    dólares de referencia, libro de BYMA (puntas CI y 24hs) con la caución a 1 día y, si hay
+    sesión, libro de Bull Market en tiempo real.
     """
     details: Dict[str, Any] = {}
     errors: List[str] = []
@@ -125,7 +129,12 @@ async def trigger_ingestion(db: Session = Depends(get_db)):
     details["byma"] = byma
     if "books_error" in byma:
         errors.append(f"BYMA: {byma['books_error']}")
-    if len(errors) == 2:
+    bm = await market_book_service.ingest_bullmarket(db)
+    details["bullmarket"] = bm
+    if "error" in bm:
+        errors.append(f"Bull Market: {bm['error']}")
+    bonistas_failed = any(e.startswith("Bonistas") for e in errors)
+    if bonistas_failed and "books" not in byma and "books" not in bm:
         raise HTTPException(status_code=502, detail="; ".join(errors))
     return {
         "status": "success" if not errors else "partial",
@@ -175,6 +184,7 @@ def get_books(
             "ask_qty": r.ask_qty, "last": r.last, "prev_close": r.prev_close,
             "volume_nominal": r.volume_nominal, "trades": r.trades, "trade_time": r.trade_time,
             "maturity_date": r.maturity_date, "timestamp": r.timestamp, "source": r.source,
+            "depth": r.depth,
         }
         for r in rows
     ]
@@ -189,7 +199,48 @@ async def get_status():
         "market_hours_only": settings.MARKET_HOURS_ONLY,
         "polling_interval_seconds": settings.POLLING_INTERVAL_SECONDS,
         "sources": source_health.snapshot(),
+        "bullmarket": bullmarket_session.to_dict(),
     }
+
+
+# ==========================================
+# BULL MARKET (TIEMPO REAL) — SESIÓN DEL TRADER
+# ==========================================
+
+class BullMarketCookieRequest(BaseModel):
+    cookie: str = Field(..., min_length=3, max_length=64000)
+
+
+@router.get("/bullmarket/session", tags=["Bull Market"])
+def get_bullmarket_session():
+    """Estado de la sesión de Bull Market. Nunca devuelve la cookie."""
+    return bullmarket_session.to_dict()
+
+
+@router.put("/bullmarket/session", tags=["Bull Market"])
+async def set_bullmarket_session(req: BullMarketCookieRequest, db: Session = Depends(get_db)):
+    """
+    Guarda la cookie de sesión (copiada del navegador con la sesión iniciada) en secrets/ y
+    prueba la conexión con una consulta de bonos. La cookie no se devuelve ni se registra.
+    """
+    try:
+        bullmarket_session.set_cookie(req.cookie)
+    except InvalidCookieError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    result = await market_book_service.ingest_bullmarket(db)
+    status = bullmarket_session.to_dict()
+    status["test"] = {k: v for k, v in result.items() if k in ("rows", "books", "error")}
+    if status["status"] == "ACTIVA":
+        arbitrage_engine.evaluate_all_strategies(db)
+    return status
+
+
+@router.delete("/bullmarket/session", tags=["Bull Market"])
+def delete_bullmarket_session():
+    """Borra la cookie guardada (vuelve a usar solo BYMA con demora)."""
+    bullmarket_session.clear()
+    market_book_service.live.pop("BULLMARKET", None)
+    return bullmarket_session.to_dict()
 
 # ==========================================
 # ENDPOINTS CUANTITATIVOS (FASE 2)

@@ -22,6 +22,9 @@ _TMP_DIR = tempfile.mkdtemp(prefix="bonistas_tests_")
 os.environ["DATABASE_URL"] = f"sqlite:///{Path(_TMP_DIR, 'test.db').as_posix()}"
 os.environ["DISABLE_SCHEDULER"] = "true"
 os.environ["SKIP_STARTUP_INGESTION"] = "true"
+# Bull Market: nunca usar la cookie real del trader en los tests
+os.environ["BULLMARKET_COOKIE_FILE"] = str(Path(_TMP_DIR, "secrets", "bullmarket_cookie.txt"))
+os.environ["BULLMARKET_COOKIE"] = ""
 
 import pytest  # noqa: E402
 
@@ -32,6 +35,10 @@ from backend.app.schemas.macro import MacroIndicatorCreate  # noqa: E402
 from backend.app.data.byma_client import BymaClient, MarketTime  # noqa: E402
 from backend.app.data.comparar_bonos_client import CompararBonosClient  # noqa: E402
 from backend.app.data.bcra_client import BcraClient  # noqa: E402
+from backend.app.data.bullmarket_client import BullMarketClient, SessionExpiredError  # noqa: E402
+
+# Cookie de prueba aceptada por el Bull Market simulado (cualquier otra se trata como vencida)
+TEST_BM_COOKIE = "ASP.NET_SessionId=test; .AspNetCore.Session=fixture"
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUN_NETWORK = os.environ.get("RUN_NETWORK_TESTS") == "1"
@@ -116,6 +123,16 @@ def _install_offline_sources(monkeypatch):
     monkeypatch.setattr(BymaClient, "fetch_market_time", fake_market_time)
     monkeypatch.setattr(CompararBonosClient, "fetch_raw", fake_comparar)
     monkeypatch.setattr(BcraClient, "fetch_latest", fake_bcra)
+
+    # --- Bull Market (etapa 4): respuesta real recortada de 24hs; CI se simula con las mismas puntas
+    bm_rows = _load("bullmarket_bonos_24hs.json")["result"]
+
+    async def fake_bm_raw(self, cookie, term, index="bonos"):
+        if cookie != TEST_BM_COOKIE:
+            raise SessionExpiredError("Sesión de Bull Market vencida o inválida (HTTP 302).")
+        return [dict(r, term=str(term)) for r in bm_rows]
+
+    monkeypatch.setattr(BullMarketClient, "fetch_raw", fake_bm_raw)
 
 
 @pytest.fixture(autouse=True)

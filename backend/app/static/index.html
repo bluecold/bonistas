@@ -238,8 +238,37 @@
                     </label>
                     <button type="submit" class="px-3.5 py-2 font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition">Guardar y reevaluar</button>
                     <span id="settings-msg" class="text-slate-400"></span>
-                    <span class="ml-auto text-[11px] text-amber-300/90">Fuente de puntas: BYMA Open Data (20 min de demora). Confirmar precios en el broker antes de operar.</span>
+                    <span id="book-source-note" class="ml-auto text-[11px] text-amber-300/90">Fuente de puntas: BYMA Open Data (20 min de demora). Confirmar precios en el broker antes de operar.</span>
                 </form>
+            </div>
+
+            <!-- Bull Market en tiempo real -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl text-xs space-y-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="radio" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="font-bold text-white">Bull Market · tiempo real</span>
+                    </div>
+                    <span id="bm-status" class="px-2 py-0.5 rounded-full border border-slate-500/30 bg-slate-500/10 text-slate-400 font-bold">Consultando...</span>
+                    <span id="bm-detail" class="text-slate-400"></span>
+                </div>
+                <form onsubmit="saveBmCookie(event)" class="flex flex-wrap items-center gap-2">
+                    <input id="bm-cookie" type="password" autocomplete="off" spellcheck="false" placeholder="Pegá acá la cookie de sesión (se guarda en secrets/, no se muestra)"
+                        class="flex-1 min-w-[320px] bg-brand-elevated border border-brand-border rounded-lg p-2 text-white font-mono focus:border-emerald-500 focus:outline-none">
+                    <button type="submit" class="px-3.5 py-2 font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition">Guardar y probar</button>
+                    <button type="button" onclick="deleteBmCookie()" class="px-3 py-2 font-semibold rounded-lg bg-brand-elevated text-slate-300 hover:text-rose-300 border border-brand-border transition">Borrar sesión</button>
+                    <span id="bm-msg" class="text-slate-400"></span>
+                </form>
+                <details class="text-slate-400">
+                    <summary class="cursor-pointer text-slate-300">Cómo obtener la cookie</summary>
+                    <ol class="list-decimal ml-5 mt-2 space-y-1">
+                        <li>Iniciá sesión en Bull Market en el navegador y abrí <b>Cotizaciones → Bonos</b>.</li>
+                        <li>Abrí las herramientas de desarrollador (F12) → pestaña <b>Red / Network</b> y filtrá por <code>GetStockPrices</code>.</li>
+                        <li>Elegí una petición → <b>Encabezados de solicitud</b> → copiá el valor de <code>cookie</code> (o clic derecho → <i>Copiar como cURL</i>; también sirve).</li>
+                        <li>Pegalo arriba y tocá <b>Guardar y probar</b>. Cuando la sesión venza vas a ver "Sesión vencida": repetí los pasos.</li>
+                    </ol>
+                    <p class="mt-2 text-[11px] text-slate-500">La cookie se guarda solo en esta PC (<code>secrets/bullmarket_cookie.txt</code>, fuera de git) y nunca se devuelve al navegador. El sistema no inicia sesión por vos ni usa tu usuario o contraseña.</p>
+                </details>
             </div>
 
             <!-- Active Signals Section -->
@@ -673,6 +702,60 @@
             } catch (err) { console.error('Error FX:', err); }
         }
 
+        const BM_LABELS = {
+            ACTIVA: ['Activa', 'emerald'], PENDIENTE: ['Sin probar', 'slate'], VENCIDA: ['Sesión vencida', 'rose'],
+            ERROR: ['Error de conexión', 'amber'], NO_CONFIGURADA: ['Sin configurar', 'slate'],
+        };
+        const BM_TONES = {
+            emerald: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300',
+            rose: 'border-rose-500/40 bg-rose-500/15 text-rose-300',
+            amber: 'border-amber-500/40 bg-amber-500/15 text-amber-300',
+            slate: 'border-slate-500/30 bg-slate-500/10 text-slate-400',
+        };
+
+        function renderBm(bm) {
+            if (!bm) return;
+            const [label, tone] = BM_LABELS[bm.status] || [bm.status, 'slate'];
+            const el = document.getElementById('bm-status');
+            el.textContent = bm.enabled ? label : 'Deshabilitado (BULLMARKET_ENABLED)';
+            el.className = `px-2 py-0.5 rounded-full border font-bold ${BM_TONES[tone]}`;
+            const t = iso => iso ? new Date(iso).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) : null;
+            const parts = [];
+            if (bm.status === 'ACTIVA') parts.push(`última consulta ${t(bm.last_ok)} · ${bm.last_rows} especies/plazos`);
+            if (bm.status === 'VENCIDA') parts.push(`venció ${t(bm.expired_at) || ''}: iniciá sesión de nuevo y pegá la cookie nueva. Mientras tanto se usa BYMA (20 min de demora).`);
+            if (bm.status === 'ERROR' && bm.last_error) parts.push(bm.last_error + ' (se reintenta en el próximo ciclo)');
+            if (bm.status === 'NO_CONFIGURADA') parts.push('Sin sesión: las señales se detectan con BYMA (20 min de demora) y no se confirman en tiempo real.');
+            if (bm.saved_at && bm.status !== 'NO_CONFIGURADA') parts.push(`cookie cargada ${t(bm.saved_at)}`);
+            document.getElementById('bm-detail').textContent = parts.join(' · ');
+        }
+
+        async function saveBmCookie(e) {
+            e.preventDefault();
+            const input = document.getElementById('bm-cookie');
+            const msg = document.getElementById('bm-msg');
+            if (!input.value.trim()) { msg.textContent = 'Pegá la cookie primero.'; msg.className = 'text-amber-300'; return; }
+            msg.textContent = 'Probando conexión...'; msg.className = 'text-slate-400';
+            try {
+                const res = await fetch('/api/v1/bullmarket/session', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({cookie: input.value})});
+                const data = await res.json();
+                input.value = '';
+                if (!res.ok) { msg.textContent = data.detail || 'Cookie no válida'; msg.className = 'text-rose-400'; return; }
+                renderBm(data);
+                if (data.status === 'ACTIVA') {
+                    msg.textContent = `Conectado: ${data.test?.rows ?? 0} especies/plazos recibidos.`; msg.className = 'text-emerald-400';
+                    fetchArbitrage(); fetchCiScanner(); fetchFx(); fetchStatus();
+                } else {
+                    msg.textContent = data.last_error || 'Bull Market rechazó la cookie.'; msg.className = 'text-rose-400'; fetchStatus();
+                }
+            } catch (err) { msg.textContent = 'Error de conexión con el servidor local.'; msg.className = 'text-rose-400'; }
+        }
+
+        async function deleteBmCookie() {
+            const msg = document.getElementById('bm-msg');
+            const res = await fetch('/api/v1/bullmarket/session', {method: 'DELETE'});
+            if (res.ok) { renderBm(await res.json()); msg.textContent = 'Sesión borrada.'; msg.className = 'text-slate-400'; fetchStatus(); }
+        }
+
         async function fetchStatus() {
             try {
                 const res = await fetch('/api/v1/status');
@@ -682,11 +765,16 @@
                 const dot = document.getElementById('market-status-dot');
                 const text = document.getElementById('market-status-text');
                 const sources = Object.values(st.sources || {});
-                const down = sources.filter(s => !s.healthy).map(s => s.name);
+                // Bull Market vencida o sin configurar se informa aparte (no es "fuente caída")
+                const down = sources.filter(s => !s.healthy && s.name !== 'BULLMARKET').map(s => s.name);
+                const bm = st.bullmarket;
+                renderBm(bm);
                 let label, tone;
                 if (!st.market.is_working_day) { label = 'Mercado cerrado (no hábil)'; tone = 'slate'; }
                 else if (st.market.polling_active) { label = `Rueda abierta · BYMA ${st.market.opening}-${st.market.closing}`; tone = 'emerald'; }
                 else { label = `Mercado cerrado · abre ${st.market.opening}`; tone = 'slate'; }
+                if (bm && bm.status === 'ACTIVA') label += ' · Bull Market en vivo';
+                if (bm && bm.status === 'VENCIDA') { label += ' · sesión Bull Market vencida'; tone = 'amber'; }
                 if (down.length) { label += ` · fuente caída: ${down.join(', ')}`; tone = 'amber'; }
                 const tones = {
                     emerald: ['bg-emerald-500/10', 'text-emerald-400', 'border-emerald-500/20', 'bg-emerald-400'],
@@ -699,7 +787,7 @@
                 const fmt = iso => iso ? new Date(iso).toLocaleTimeString('es-AR') : 'nunca';
                 badge.title = sources.length
                     ? sources.map(s => `${s.name}: ${s.healthy ? 'OK' : 'ERROR'} · última OK ${fmt(s.last_success)}${s.last_error && !s.healthy ? ' · ' + s.last_error : ''}`).join('\n')
-                        + '\n\nBYMA Open Data publica con 20 min de demora.'
+                        + '\n\nBYMA Open Data publica con 20 min de demora; Bull Market, en tiempo real.'
                     : 'Sin consultas todavía';
             } catch (err) {
                 console.error("Error fetching status:", err);
@@ -751,6 +839,16 @@
                 if (!res.ok) return;
                 const data = await res.json();
 
+                const counts = (data.book_sources && data.book_sources.counts) || {};
+                const note = document.getElementById('book-source-note');
+                if (counts.BULLMARKET) {
+                    note.textContent = `Puntas: Bull Market en tiempo real (${counts.BULLMARKET} libros, 5 niveles)` + (counts.BYMA ? ` + BYMA con demora (${counts.BYMA})` : '') + '.';
+                    note.className = 'ml-auto text-[11px] text-emerald-300/90';
+                } else {
+                    note.textContent = 'Fuente de puntas: BYMA Open Data (20 min de demora). Confirmar precios en el broker antes de operar.';
+                    note.className = 'ml-auto text-[11px] text-amber-300/90';
+                }
+
                 // 1. Badge count
                 const badge = document.getElementById('signals-badge');
                 badge.innerText = data.active_signals_count;
@@ -775,6 +873,8 @@
                         const isLeg = !s.leg_sell_ticker.includes(' ');   // swaps entre bonos: simulables
                         const conf = s.confirmation === 'TIEMPO_REAL'
                             ? '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Confirmada en tiempo real</span>'
+                            : s.confirmation === 'PARCIAL'
+                            ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Una pata con puntas de Bull Market y otra de BYMA (20 min de demora)">Parcial · una pata con demora</span>'
                             : '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="BYMA Open Data publica con 20 minutos de demora">Detectada · demora 20 min</span>';
                         const since = s.first_seen ? new Date(s.first_seen).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'}) : '-';
                         const net = (s.net_profit_pct !== null && s.net_profit_pct !== undefined)

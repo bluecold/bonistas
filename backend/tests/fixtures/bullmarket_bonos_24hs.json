@@ -1,0 +1,1784 @@
+{
+ "result": [
+  {
+   "ticker": "AE38",
+   "name": "Bono Soberano USD Ley ARG 2038",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 107910,
+      "quantity": 2288,
+      "position": 1
+     },
+     {
+      "price": 107900,
+      "quantity": 200,
+      "position": 2
+     },
+     {
+      "price": 107860,
+      "quantity": 2000,
+      "position": 3
+     },
+     {
+      "price": 107850,
+      "quantity": 100,
+      "position": 4
+     },
+     {
+      "price": 107820,
+      "quantity": 100,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 107930,
+      "quantity": 790,
+      "position": 1
+     },
+     {
+      "price": 108580,
+      "quantity": 562,
+      "position": 2
+     },
+     {
+      "price": 108690,
+      "quantity": 20000,
+      "position": 3
+     },
+     {
+      "price": 108700,
+      "quantity": 1000,
+      "position": 4
+     },
+     {
+      "price": 108770,
+      "quantity": 5284,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 107350,
+    "min": 107080,
+    "max": 108850,
+    "price": 107910,
+    "totalNominalValue": 6081034,
+    "totalAmount": 6573114026,
+    "operations": 4396,
+    "close": 108010,
+    "lastPrice": 0,
+    "variation": -0.09,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170123",
+   "change": false,
+   "date": "2026-11-04T17:01:23.2100144-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "AE38D",
+   "parentTicker": "AE38",
+   "name": "BONO REP. ARGENTINA USD STEP UP 2038",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 68.1,
+      "quantity": 3215,
+      "position": 1
+     },
+     {
+      "price": 68.01,
+      "quantity": 14632,
+      "position": 2
+     },
+     {
+      "price": 68,
+      "quantity": 7014,
+      "position": 3
+     },
+     {
+      "price": 67.95,
+      "quantity": 50,
+      "position": 4
+     },
+     {
+      "price": 67.9,
+      "quantity": 2500,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 68.65,
+      "quantity": 99995,
+      "position": 1
+     },
+     {
+      "price": 68.66,
+      "quantity": 2217,
+      "position": 2
+     },
+     {
+      "price": 68.76,
+      "quantity": 8000,
+      "position": 3
+     },
+     {
+      "price": 68.82,
+      "quantity": 2000,
+      "position": 4
+     },
+     {
+      "price": 68.9,
+      "quantity": 8000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 68.49,
+    "min": 68,
+    "max": 69.01,
+    "price": 68.65,
+    "totalNominalValue": 5079885,
+    "totalAmount": 3475565,
+    "operations": 3268,
+    "close": 68.5,
+    "lastPrice": 0,
+    "variation": 0.21,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170209",
+   "change": false,
+   "date": "2026-11-04T17:02:09.6628178-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "AL29",
+   "name": "BONOS REP. ARG. USD 1% 2029",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 83150,
+      "quantity": 5000,
+      "position": 1
+     },
+     {
+      "price": 83120,
+      "quantity": 35,
+      "position": 2
+     },
+     {
+      "price": 82890,
+      "quantity": 4000,
+      "position": 3
+     },
+     {
+      "price": 82500,
+      "quantity": 2000,
+      "position": 4
+     },
+     {
+      "price": 16000,
+      "quantity": 1,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 83250,
+      "quantity": 249999,
+      "position": 1
+     },
+     {
+      "price": 83300,
+      "quantity": 199969,
+      "position": 2
+     },
+     {
+      "price": 83450,
+      "quantity": 121100,
+      "position": 3
+     },
+     {
+      "price": 83520,
+      "quantity": 100000,
+      "position": 4
+     },
+     {
+      "price": 83570,
+      "quantity": 890,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 83600,
+    "min": 82780,
+    "max": 83830,
+    "price": 83250,
+    "totalNominalValue": 3957270,
+    "totalAmount": 3299432677,
+    "operations": 1232,
+    "close": 83200,
+    "lastPrice": 0,
+    "variation": 0.06,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170241",
+   "change": false,
+   "date": "2026-11-04T17:02:41.5136872-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "AL29D",
+   "parentTicker": "AL29",
+   "name": "BONO REP ARGENTINA USD 1% 2029",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 52.3,
+      "quantity": 2200,
+      "position": 1
+     },
+     {
+      "price": 52,
+      "quantity": 502,
+      "position": 2
+     },
+     {
+      "price": 51.71,
+      "quantity": 5,
+      "position": 3
+     },
+     {
+      "price": 51.7,
+      "quantity": 2000,
+      "position": 4
+     },
+     {
+      "price": 51.56,
+      "quantity": 9697,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 52.65,
+      "quantity": 1000,
+      "position": 1
+     },
+     {
+      "price": 52.75,
+      "quantity": 99,
+      "position": 2
+     },
+     {
+      "price": 52.9,
+      "quantity": 112000,
+      "position": 3
+     },
+     {
+      "price": 53,
+      "quantity": 94,
+      "position": 4
+     },
+     {
+      "price": 53.1,
+      "quantity": 5000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 52.94,
+    "min": 52.47,
+    "max": 53.05,
+    "price": 52.47,
+    "totalNominalValue": 550987,
+    "totalAmount": 290802,
+    "operations": 737,
+    "close": 53,
+    "lastPrice": 0,
+    "variation": -1,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170152",
+   "change": false,
+   "date": "2026-11-04T17:01:52.1706824-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "AL30",
+   "name": "BONOS REP. ARG. USD STEP UP 2030",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 83190,
+      "quantity": 500,
+      "position": 1
+     },
+     {
+      "price": 83150,
+      "quantity": 19122,
+      "position": 2
+     },
+     {
+      "price": 83140,
+      "quantity": 424551,
+      "position": 3
+     },
+     {
+      "price": 83110,
+      "quantity": 2727,
+      "position": 4
+     },
+     {
+      "price": 83050,
+      "quantity": 34058,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 83240,
+      "quantity": 18349,
+      "position": 1
+     },
+     {
+      "price": 83250,
+      "quantity": 700000,
+      "position": 2
+     },
+     {
+      "price": 83260,
+      "quantity": 60613,
+      "position": 3
+     },
+     {
+      "price": 83270,
+      "quantity": 2343,
+      "position": 4
+     },
+     {
+      "price": 83290,
+      "quantity": 121824,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 83290,
+    "min": 82890,
+    "max": 83890,
+    "price": 83200,
+    "totalNominalValue": 250809417,
+    "totalAmount": 209048768865,
+    "operations": 73438,
+    "close": 83210,
+    "lastPrice": 0,
+    "variation": -0.01,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170100",
+   "change": false,
+   "date": "2026-11-04T17:01:00.7468551-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "AL30C",
+   "parentTicker": "AL30",
+   "name": "BONOS REP. ARG. USD STEP UP 2030",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 49.5,
+      "quantity": 198227,
+      "position": 1
+     },
+     {
+      "price": 49.386,
+      "quantity": 1689,
+      "position": 2
+     },
+     {
+      "price": 49,
+      "quantity": 80,
+      "position": 3
+     },
+     {
+      "price": 48.01,
+      "quantity": 120000,
+      "position": 4
+     }
+    ],
+    "askTop": [
+     {
+      "price": 49.6,
+      "quantity": 200000,
+      "position": 1
+     },
+     {
+      "price": 49.8,
+      "quantity": 100000,
+      "position": 2
+     },
+     {
+      "price": 49.818,
+      "quantity": 438559,
+      "position": 3
+     },
+     {
+      "price": 49.82,
+      "quantity": 120000,
+      "position": 4
+     },
+     {
+      "price": 49.831,
+      "quantity": 16354,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 49.884,
+    "min": 49.358,
+    "max": 50.04,
+    "price": 49.5,
+    "totalNominalValue": 241004548,
+    "totalAmount": 119624078,
+    "operations": 35265,
+    "close": 49.82,
+    "lastPrice": 0,
+    "variation": -0.64,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "CCL",
+   "emisionDate": 20261104,
+   "emisionTime": "170002",
+   "change": false,
+   "date": "2026-11-04T17:00:02.1357995-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano"
+  },
+  {
+   "ticker": "AL30D",
+   "parentTicker": "AL30",
+   "name": "BONOS REP. ARG. USD STEP UP 2030",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 52.5,
+      "quantity": 1968,
+      "position": 1
+     },
+     {
+      "price": 52.4,
+      "quantity": 95939,
+      "position": 2
+     },
+     {
+      "price": 52.14,
+      "quantity": 7000,
+      "position": 3
+     },
+     {
+      "price": 52,
+      "quantity": 543,
+      "position": 4
+     },
+     {
+      "price": 51.66,
+      "quantity": 103726,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 52.75,
+      "quantity": 78,
+      "position": 1
+     },
+     {
+      "price": 52.79,
+      "quantity": 3565,
+      "position": 2
+     },
+     {
+      "price": 52.81,
+      "quantity": 4322,
+      "position": 3
+     },
+     {
+      "price": 52.86,
+      "quantity": 1,
+      "position": 4
+     },
+     {
+      "price": 52.87,
+      "quantity": 493,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 52.88,
+    "min": 52.5,
+    "max": 53.08,
+    "price": 52.5,
+    "totalNominalValue": 221555860,
+    "totalAmount": 116940974,
+    "operations": 59549,
+    "close": 52.85,
+    "lastPrice": 0,
+    "variation": -0.66,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170209",
+   "change": false,
+   "date": "2026-11-04T17:02:09.6308251-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano"
+  },
+  {
+   "ticker": "BPA7D",
+   "parentTicker": "BPOA7",
+   "name": "BOPREAL Serie 1A. Tasa fija 5% USD. Vto. 10-2027",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 102,
+      "quantity": 8230,
+      "position": 1
+     },
+     {
+      "price": 100.1,
+      "quantity": 10000,
+      "position": 2
+     }
+    ],
+    "askTop": [
+     {
+      "price": 102.75,
+      "quantity": 400,
+      "position": 1
+     },
+     {
+      "price": 103.7,
+      "quantity": 300,
+      "position": 2
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 102,
+    "min": 102,
+    "max": 103.15,
+    "price": 102.1,
+    "totalNominalValue": 86408,
+    "totalAmount": 88369,
+    "operations": 130,
+    "close": 102.25,
+    "lastPrice": 0,
+    "variation": -0.14,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170632",
+   "change": false,
+   "date": "2026-11-04T17:06:32.3403517-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Banco central"
+  },
+  {
+   "ticker": "BPOA7",
+   "name": "BOPREAL Serie 1 A - USD 5% - Vto 31/10/2027",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 161350,
+      "quantity": 44,
+      "position": 1
+     },
+     {
+      "price": 161300,
+      "quantity": 80,
+      "position": 2
+     },
+     {
+      "price": 160630,
+      "quantity": 500,
+      "position": 3
+     },
+     {
+      "price": 160620,
+      "quantity": 622,
+      "position": 4
+     },
+     {
+      "price": 160300,
+      "quantity": 2000,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 161950,
+      "quantity": 95,
+      "position": 1
+     },
+     {
+      "price": 161990,
+      "quantity": 100,
+      "position": 2
+     },
+     {
+      "price": 162100,
+      "quantity": 350,
+      "position": 3
+     },
+     {
+      "price": 162500,
+      "quantity": 3833,
+      "position": 4
+     },
+     {
+      "price": 162600,
+      "quantity": 97,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 160010,
+    "min": 160010,
+    "max": 164000,
+    "price": 162150,
+    "totalNominalValue": 50561,
+    "totalAmount": 82101350,
+    "operations": 126,
+    "close": 161090,
+    "lastPrice": 0,
+    "variation": 0.65,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170634",
+   "change": false,
+   "date": "2026-11-04T17:06:34.6919574-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Banco central"
+  },
+  {
+   "ticker": "GD29D",
+   "parentTicker": "GD29",
+   "name": "BONOS REP. ARG. U$S 1% STEP UP V09/07/29",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 53.45,
+      "quantity": 2000,
+      "position": 1
+     },
+     {
+      "price": 53,
+      "quantity": 76471,
+      "position": 2
+     },
+     {
+      "price": 28.64,
+      "quantity": 3,
+      "position": 3
+     },
+     {
+      "price": 26.2,
+      "quantity": 3,
+      "position": 4
+     },
+     {
+      "price": 25.98,
+      "quantity": 3,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 53.5,
+      "quantity": 2295,
+      "position": 1
+     },
+     {
+      "price": 54.39,
+      "quantity": 500,
+      "position": 2
+     },
+     {
+      "price": 54.4,
+      "quantity": 44587,
+      "position": 3
+     },
+     {
+      "price": 54.56,
+      "quantity": 500,
+      "position": 4
+     },
+     {
+      "price": 54.58,
+      "quantity": 100,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 53.44,
+    "min": 53.03,
+    "max": 54.93,
+    "price": 53.5,
+    "totalNominalValue": 272054,
+    "totalAmount": 146198,
+    "operations": 450,
+    "close": 54.03,
+    "lastPrice": 0,
+    "variation": -0.98,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170304",
+   "change": false,
+   "date": "2026-11-04T17:03:04.6629392-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "GD30",
+   "name": "BONOS REP ARG U$S STEP UP V090730",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 85800,
+      "quantity": 497410,
+      "position": 1
+     },
+     {
+      "price": 85500,
+      "quantity": 150,
+      "position": 2
+     },
+     {
+      "price": 84110,
+      "quantity": 14259,
+      "position": 3
+     },
+     {
+      "price": 84100,
+      "quantity": 118,
+      "position": 4
+     },
+     {
+      "price": 83500,
+      "quantity": 119,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 86000,
+      "quantity": 49001,
+      "position": 1
+     },
+     {
+      "price": 86080,
+      "quantity": 64477,
+      "position": 2
+     },
+     {
+      "price": 86100,
+      "quantity": 365337,
+      "position": 3
+     },
+     {
+      "price": 86200,
+      "quantity": 480969,
+      "position": 4
+     },
+     {
+      "price": 86350,
+      "quantity": 123100,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 86400,
+    "min": 85760,
+    "max": 86800,
+    "price": 86000,
+    "totalNominalValue": 14949713,
+    "totalAmount": 12914984677,
+    "operations": 7006,
+    "close": 85390,
+    "lastPrice": 0,
+    "variation": 0.71,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170036",
+   "change": false,
+   "date": "2026-11-04T17:00:36.8888313-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "GD30C",
+   "parentTicker": "GD30",
+   "name": "Bonos Globales de la Republica Argentina USD Step Up Vto. 2030",
+   "stockOffer": {
+    "bidTop": [],
+    "askTop": [
+     {
+      "price": 51.35,
+      "quantity": 70000,
+      "position": 1
+     },
+     {
+      "price": 51.38,
+      "quantity": 25000,
+      "position": 2
+     },
+     {
+      "price": 51.4,
+      "quantity": 99802,
+      "position": 3
+     },
+     {
+      "price": 51.45,
+      "quantity": 110000,
+      "position": 4
+     },
+     {
+      "price": 51.5,
+      "quantity": 10000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 51.79,
+    "min": 51.2,
+    "max": 51.91,
+    "price": 51.2,
+    "totalNominalValue": 2666370,
+    "totalAmount": 1370906,
+    "operations": 1014,
+    "close": 51.7,
+    "lastPrice": 0,
+    "variation": -0.96,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "CCL",
+   "emisionDate": 20261104,
+   "emisionTime": "170014",
+   "change": false,
+   "date": "2026-11-04T17:00:14.2844088-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano"
+  },
+  {
+   "ticker": "GD30D",
+   "parentTicker": "GD30",
+   "name": "BONOS REP ARG U$S STEP UP V090730 (USD MEP)",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 53.37,
+      "quantity": 1000,
+      "position": 1
+     },
+     {
+      "price": 33,
+      "quantity": 500,
+      "position": 2
+     },
+     {
+      "price": 26.18,
+      "quantity": 3,
+      "position": 3
+     },
+     {
+      "price": 25.87,
+      "quantity": 3,
+      "position": 4
+     },
+     {
+      "price": 25.77,
+      "quantity": 3,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 54.5,
+      "quantity": 9000,
+      "position": 1
+     },
+     {
+      "price": 54.65,
+      "quantity": 91,
+      "position": 2
+     },
+     {
+      "price": 54.72,
+      "quantity": 25000,
+      "position": 3
+     },
+     {
+      "price": 54.9,
+      "quantity": 52,
+      "position": 4
+     },
+     {
+      "price": 55,
+      "quantity": 1000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 54.5,
+    "min": 54.3,
+    "max": 54.96,
+    "price": 54.39,
+    "totalNominalValue": 1667589,
+    "totalAmount": 912313,
+    "operations": 1949,
+    "close": 54.75,
+    "lastPrice": 0,
+    "variation": -0.65,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170211",
+   "change": false,
+   "date": "2026-11-04T17:02:11.798319-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano"
+  },
+  {
+   "ticker": "GD35D",
+   "parentTicker": "GD35",
+   "name": "BONOS REP. ARG. U$S STEP UP V.09/07/35",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 69.55,
+      "quantity": 91142,
+      "position": 1
+     },
+     {
+      "price": 69.5,
+      "quantity": 300,
+      "position": 2
+     },
+     {
+      "price": 68.4,
+      "quantity": 1000,
+      "position": 3
+     },
+     {
+      "price": 67.98,
+      "quantity": 60,
+      "position": 4
+     },
+     {
+      "price": 23.61,
+      "quantity": 4,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 70.1,
+      "quantity": 4226,
+      "position": 1
+     },
+     {
+      "price": 70.5,
+      "quantity": 4717,
+      "position": 2
+     },
+     {
+      "price": 70.74,
+      "quantity": 1154,
+      "position": 3
+     },
+     {
+      "price": 70.78,
+      "quantity": 1569,
+      "position": 4
+     },
+     {
+      "price": 70.9,
+      "quantity": 100,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 70.64,
+    "min": 69.56,
+    "max": 70.74,
+    "price": 69.56,
+    "totalNominalValue": 2585320,
+    "totalAmount": 1818032,
+    "operations": 1869,
+    "close": 70.19,
+    "lastPrice": 0,
+    "variation": -0.89,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170243",
+   "change": false,
+   "date": "2026-11-04T17:02:43.7495478-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "GD38D",
+   "parentTicker": "GD38",
+   "name": "BONOS REP. ARG. U$S STEP UP V.09/01/38",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 73.72,
+      "quantity": 2000,
+      "position": 1
+     },
+     {
+      "price": 71.46,
+      "quantity": 1000,
+      "position": 2
+     },
+     {
+      "price": 30.1,
+      "quantity": 3,
+      "position": 3
+     },
+     {
+      "price": 29.85,
+      "quantity": 3,
+      "position": 4
+     },
+     {
+      "price": 28.67,
+      "quantity": 3,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 74.45,
+      "quantity": 996,
+      "position": 1
+     },
+     {
+      "price": 74.6,
+      "quantity": 7913,
+      "position": 2
+     },
+     {
+      "price": 74.7,
+      "quantity": 2000,
+      "position": 3
+     },
+     {
+      "price": 74.74,
+      "quantity": 639,
+      "position": 4
+     },
+     {
+      "price": 74.75,
+      "quantity": 12372,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 74.21,
+    "min": 74.11,
+    "max": 75.09,
+    "price": 74.45,
+    "totalNominalValue": 1459807,
+    "totalAmount": 1089126,
+    "operations": 1131,
+    "close": 74.35,
+    "lastPrice": 0,
+    "variation": 0.13,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170221",
+   "change": false,
+   "date": "2026-11-04T17:02:21.6718947-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano"
+  },
+  {
+   "ticker": "GD41D",
+   "parentTicker": "GD41",
+   "name": "BONOS REP. ARG. U$S STEP UP V.09/07/41",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 65.4,
+      "quantity": 10,
+      "position": 1
+     },
+     {
+      "price": 65.3,
+      "quantity": 1000,
+      "position": 2
+     },
+     {
+      "price": 65,
+      "quantity": 3656,
+      "position": 3
+     },
+     {
+      "price": 63.9,
+      "quantity": 1000,
+      "position": 4
+     },
+     {
+      "price": 26.51,
+      "quantity": 3,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 66.5,
+      "quantity": 22500,
+      "position": 1
+     },
+     {
+      "price": 67.21,
+      "quantity": 2015,
+      "position": 2
+     },
+     {
+      "price": 73,
+      "quantity": 41767,
+      "position": 3
+     },
+     {
+      "price": 77.55,
+      "quantity": 847,
+      "position": 4
+     },
+     {
+      "price": 78,
+      "quantity": 1000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 65.62,
+    "min": 65.34,
+    "max": 66.19,
+    "price": 65.54,
+    "totalNominalValue": 876717,
+    "totalAmount": 577728,
+    "operations": 813,
+    "close": 65.85,
+    "lastPrice": 0,
+    "variation": -0.47,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261104,
+   "emisionTime": "170232",
+   "change": false,
+   "date": "2026-11-04T17:02:32.6858336-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "S30N6",
+   "name": "LECAP - VTO 30/11/26 ",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 127.85,
+      "quantity": 592908380,
+      "position": 1
+     },
+     {
+      "price": 127.834,
+      "quantity": 1108740009,
+      "position": 2
+     },
+     {
+      "price": 127.833,
+      "quantity": 1153458,
+      "position": 3
+     },
+     {
+      "price": 127.83,
+      "quantity": 2000000000,
+      "position": 4
+     },
+     {
+      "price": 127.82,
+      "quantity": 5000000000,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 127.856,
+      "quantity": 280000,
+      "position": 1
+     },
+     {
+      "price": 127.86,
+      "quantity": 993375857,
+      "position": 2
+     },
+     {
+      "price": 127.864,
+      "quantity": 497633005,
+      "position": 3
+     },
+     {
+      "price": 127.868,
+      "quantity": 2000000000,
+      "position": 4
+     },
+     {
+      "price": 127.87,
+      "quantity": 1997204113,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 128,
+    "min": 127.79,
+    "max": 128.1,
+    "price": 127.85,
+    "totalNominalValue": 128344770453,
+    "totalAmount": 164050044452,
+    "operations": 2746,
+    "close": 127.769,
+    "lastPrice": 0,
+    "variation": 0.06,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170009",
+   "change": false,
+   "date": "2026-11-04T17:00:09.8978198-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  },
+  {
+   "ticker": "TZX27",
+   "name": "BONCER DESC - VTO 30/06/2027",
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 417.8,
+      "quantity": 49437042,
+      "position": 1
+     },
+     {
+      "price": 417.7,
+      "quantity": 239406,
+      "position": 2
+     },
+     {
+      "price": 417.6,
+      "quantity": 35862,
+      "position": 3
+     },
+     {
+      "price": 417.5,
+      "quantity": 100000,
+      "position": 4
+     },
+     {
+      "price": 413.05,
+      "quantity": 55555,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 418.4,
+      "quantity": 5467126,
+      "position": 1
+     },
+     {
+      "price": 418.6,
+      "quantity": 3575061,
+      "position": 2
+     },
+     {
+      "price": 419,
+      "quantity": 41186872,
+      "position": 3
+     },
+     {
+      "price": 425.45,
+      "quantity": 555555,
+      "position": 4
+     },
+     {
+      "price": 425.95,
+      "quantity": 555555,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 419.95,
+    "min": 416,
+    "max": 420,
+    "price": 418.25,
+    "totalNominalValue": 315528891,
+    "totalAmount": 1319215223,
+    "operations": 252,
+    "close": 417.55,
+    "lastPrice": 0,
+    "variation": 0.16,
+    "trend": 0,
+    "setlementPrice": 0,
+    "adjacentPrice": 0,
+    "openInterest": 0,
+    "turnover": 0,
+    "trades": 0,
+    "doubleTotalAmount": 0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261104,
+   "emisionTime": "170446",
+   "change": false,
+   "date": "2026-11-04T17:04:46.979715-03:00",
+   "executionMonthOrder": 0,
+   "strikePrice": 0,
+   "term": "2",
+   "isOption": true,
+   "mayorista": 0,
+   "issuerBond": "Soberano",
+   "typeRateBond": ""
+  }
+ ],
+ "isBond": true
+}

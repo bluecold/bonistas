@@ -13,7 +13,7 @@ Convenciones de BYMA:
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -76,6 +76,9 @@ class BookRow:
     trades: Optional[int]
     trade_time: Optional[str]
     maturity_date: Optional[date]
+    # Profundidad completa [(precio, cantidad), ...] cuando la fuente la publica (Bull Market: 5 niveles)
+    bids: Optional[List[Tuple[float, float]]] = None
+    asks: Optional[List[Tuple[float, float]]] = None
 
 
 def parse_bond_rows(raw_rows: List[Dict[str, Any]]) -> List[BookRow]:

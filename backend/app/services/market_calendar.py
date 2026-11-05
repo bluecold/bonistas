@@ -83,3 +83,10 @@ class MarketCalendar:
             return True
         now = now or datetime.now(ART)
         return (await self.today(now)).is_open_for_polling(now)
+
+    async def is_trading(self, now: Optional[datetime] = None) -> bool:
+        """Rueda abierta (con 5 min de anticipación y 2 de gracia), para fuentes en tiempo real."""
+        if not settings.MARKET_HOURS_ONLY:
+            return True
+        now = now or datetime.now(ART)
+        return (await self.today(now)).is_open_for_polling(now, lead_minutes=5, delay_minutes=2)

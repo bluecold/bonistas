@@ -22,7 +22,7 @@ el tamaño de operación configurado.
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
-from backend.app.arbitrage.market_view import MarketView, walk_book
+from backend.app.arbitrage.market_view import MarketView, walk_book, combined_source
 from backend.app.services.trading_settings import TradingParams
 
 
@@ -133,7 +133,7 @@ def detect_ci_vs_24hs(view: MarketView, params: TradingParams) -> List[CiOpportu
                 nominal=_r(nominal, 0), size_usd=params.trade_size_usd,
                 gross_pct=_r(gross), fees_pct=round(2 * fee * 100.0, 4), carry_pct=round(carry_pct, 4),
                 flow_adjustment=round(flow, 6), coupon_status=coupon_status, net_pct=_r(net),
-                depth_ok=depth_ok, signal=signal, days=days, source=ci.source, notes=notes,
+                depth_ok=depth_ok, signal=signal, days=days, source=combined_source(ci, h24), notes=notes,
             ))
     out.sort(key=lambda o: (o.net_pct if o.net_pct is not None else -1e9), reverse=True)
     return out

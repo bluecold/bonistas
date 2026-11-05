@@ -146,6 +146,8 @@ class BookQuote(Base):
     trades = Column(Integer, nullable=True)
     trade_time = Column(String(12), nullable=True)       # hora de la última operación según la fuente
     maturity_date = Column(Date, nullable=True)
+    # Profundidad {"bids": [[precio, cantidad], ...], "asks": [...]} si la fuente la publica
+    depth = Column(JSON, nullable=True)
 
     __table_args__ = (
         Index("idx_book_symbol_settlement", "source", "symbol", "settlement", "id"),

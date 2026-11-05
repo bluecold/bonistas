@@ -35,13 +35,18 @@ logger = logging.getLogger("bonistas_trading")
 scheduler = AsyncIOScheduler(timezone=ART)
 
 
-async def run_market_cycle(db) -> None:
-    """Un ciclo completo: analítica (Bonistas), libro de BYMA y evaluación de estrategias."""
+async def run_market_cycle(db, include_bullmarket: bool = True) -> None:
+    """
+    Un ciclo completo: analítica (Bonistas), libro de BYMA, libro de Bull Market en tiempo
+    real (si hay sesión) y evaluación de estrategias.
+    """
     try:
         await ingestion_service.ingest_market_data(db)
     except Exception as e:
         logger.error(f"Bonistas: {e}")
     await market_book_service.ingest_byma(db)
+    if include_bullmarket:
+        await market_book_service.ingest_bullmarket(db)
     arbitrage_engine.evaluate_all_strategies(db)
 
 
@@ -52,7 +57,8 @@ async def scheduled_ingestion_job():
         return
     db = SessionLocal()
     try:
-        await run_market_cycle(db)
+        # Bull Market es tiempo real: solo durante la rueda (no en los 25 min extra por la demora de BYMA)
+        await run_market_cycle(db, include_bullmarket=await market_calendar.is_trading())
     except Exception as e:
         logger.error(f"Error en ciclo programado de ingesta/arbitraje: {e}")
     finally:

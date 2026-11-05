@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     MIN_NET_PROFIT_PCT: float = 0.40     # Ganancia neta mínima para disparar un arbitraje
     TRADE_SIZE_USD: float = 500.0        # Tamaño de operación para evaluar la profundidad del libro
 
+    # Bull Market (tiempo real, etapa 4). La cookie de sesión NO va en el código: se pega en el
+    # dashboard y se guarda en BULLMARKET_COOKIE_FILE (carpeta secrets/, fuera de git). También
+    # puede definirse BULLMARKET_COOKIE en el .env (se usa si el archivo no existe).
+    BULLMARKET_ENABLED: bool = True
+    BULLMARKET_COOKIE: str = ""
+    BULLMARKET_COOKIE_FILE: str = "secrets/bullmarket_cookie.txt"
+    # Los libros de Bull Market solo se usan si la última consulta OK tiene menos de esta antigüedad
+    BULLMARKET_MAX_AGE_SECONDS: int = 180
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 

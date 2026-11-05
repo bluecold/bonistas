@@ -323,6 +323,6 @@ def test_statistical_rules_need_real_history(db_session):
     from backend.app.arbitrage.ratios import PairRatio
     r = PairRatio(a="AL30", b="GD30", kind="LEY", settlement="24HS", mid_ratio=1.11, rotate_a_to_b=0.89,
                   rotate_b_to_a=1.10, z_score=1.7, hist_mean=1.055, hist_std=0.032, calibration="ESTATICA")
-    assert E._signals_from_law_ratios([r], "BYMA") == []
+    assert E._signals_from_law_ratios([r]) == []
     r.calibration = "HISTORICA_40d"
-    assert [s.action_recommended for s in E._signals_from_law_ratios([r], "BYMA")] == ["ROTAR_A_ARG"]
+    assert [s.action_recommended for s in E._signals_from_law_ratios([r])] == ["ROTAR_A_ARG"]

@@ -18,7 +18,7 @@ las 4 patas en el mismo plazo:  ganancia = tc_venta(Y) / tc_compra(X) - 1  (cost
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
-from backend.app.arbitrage.market_view import MarketView, walk_book
+from backend.app.arbitrage.market_view import MIXED_SOURCE, MarketView, combined_source, walk_book
 from backend.app.services.trading_settings import TradingParams
 
 SETTLEMENTS = ("CI", "24HS")
@@ -38,6 +38,7 @@ class FxQuote:
     sell_depth_ok: bool
     nominal: Optional[float]
     notes: List[str] = field(default_factory=list)
+    source: str = "BYMA"
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -54,6 +55,7 @@ class FxRoundTrip:
     net_pct: float
     signal: bool
     notes: List[str] = field(default_factory=list)
+    source: str = "BYMA"
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -106,6 +108,7 @@ def implied_fx_quotes(view: MarketView, params: TradingParams) -> List[FxQuote]:
                         sell_usd_rate=round(sell, 2) if sell else None,
                         buy_depth_ok=ok1 and ok2, sell_depth_ok=ok3 and ok4,
                         nominal=round(nominal) if nominal else None, notes=notes,
+                        source=combined_source(ars, usd),
                     ))
     return out
 
@@ -135,5 +138,6 @@ def best_round_trips(quotes: List[FxQuote], params: TradingParams) -> List[FxRou
                 signal=net >= params.min_net_profit_pct,
                 notes=[f"4 operaciones con costo {params.commission_pct}% c/u ya incluido.",
                        "Verificar restricciones vigentes de CNV para operaciones con dólar MEP/CCL."],
+                source=b.source if b.source == v.source else MIXED_SOURCE,
             ))
     return out

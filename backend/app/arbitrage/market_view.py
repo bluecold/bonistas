@@ -2,8 +2,9 @@
 Vista de mercado para los detectores de arbitraje.
 
 Reúne, para un instante dado:
-- Los libros (puntas) por especie y plazo, de una o más fuentes (BYMA con 20 min de demora;
-  Bull Market en tiempo real en la etapa 4).
+- Los libros (puntas) por especie y plazo, de una o más fuentes (BYMA con 20 min de demora y
+  solo la mejor punta; Bull Market en tiempo real con 5 niveles). Los de Bull Market solo se
+  usan si la última consulta correcta es reciente: si la sesión venció, se vuelve a BYMA.
 - El tipo de cambio de referencia para convertir el tamaño de operación (USD) a nominales.
 - La caución a 1 día (costo normal de financiar un día entre CI y 24hs).
 - Los pagos (renta + amortización) que caen entre la liquidación CI y la de 24hs: el precio
@@ -91,11 +92,38 @@ def walk_book(levels: List[Level], nominal: float) -> Fill:
     return Fill(cost / filled, filled, nominal)
 
 
+def _depth_levels(raw) -> List[Level]:
+    out = []
+    for item in raw or []:
+        try:
+            p, qty = float(item[0]), float(item[1] or 0.0)
+        except (TypeError, ValueError, IndexError):
+            continue
+        if p > 0:
+            out.append(Level(p, qty))
+    return out
+
+
 def book_from_row(q: BookQuote) -> Book:
-    bids = [Level(q.bid, q.bid_qty or 0.0)] if q.bid else []
-    asks = [Level(q.ask, q.ask_qty or 0.0)] if q.ask else []
+    depth = q.depth if isinstance(q.depth, dict) else None
+    if depth and (depth.get("bids") or depth.get("asks")):
+        bids, asks = _depth_levels(depth.get("bids")), _depth_levels(depth.get("asks"))
+    else:
+        bids = [Level(q.bid, q.bid_qty or 0.0)] if q.bid else []
+        asks = [Level(q.ask, q.ask_qty or 0.0)] if q.ask else []
     return Book(q.symbol, q.base_ticker, q.currency, q.settlement, bids, asks, q.last,
                 q.trade_time, q.timestamp, q.source)
+
+
+MIXED_SOURCE = "MIXTO"
+
+
+def combined_source(*books: Optional["Book"]) -> str:
+    """Fuente de una operación con varias patas: la común a todas, o MIXTO si difieren."""
+    sources = {b.source for b in books if b is not None}
+    if len(sources) == 1:
+        return sources.pop()
+    return MIXED_SOURCE if sources else "SIN_DATOS"
 
 
 @dataclass
@@ -197,18 +225,31 @@ def build_market_view(
     sources: Tuple[str, ...] = ("BYMA",),
     now: Optional[datetime] = None,
     book_service: Optional[MarketBookService] = None,
+    live_max_age: Optional[Dict[str, float]] = None,
 ) -> MarketView:
     """
     Arma la vista con la última fila de cada especie/plazo. Si hay varias fuentes, la que
     aparece primero en `sources` tiene prioridad (ej. ("BULLMARKET", "BYMA")).
+
+    `live_max_age` = {fuente: segundos}: para esas fuentes (en tiempo real) solo se usan las
+    especies que vinieron en la última consulta correcta, y solo si no es más vieja que el
+    límite. Así una sesión de Bull Market vencida no deja puntas viejas "pisando" a BYMA.
     """
     now = now or datetime.now(ART)
     today = now.astimezone(ART).date()
     svc = book_service or MarketBookService()
+    live_max_age = live_max_age or {}
 
     books: Dict[Tuple[str, str], Book] = {}
     for source in reversed(sources):        # la de mayor prioridad sobrescribe al final
+        allowed = None
+        if source in live_max_age:
+            allowed = svc.live_keys(source, live_max_age[source])
+            if allowed is None:
+                continue
         for q in svc.latest_books(db, source=source):
+            if allowed is not None and (q.symbol, q.settlement) not in allowed:
+                continue
             books[(q.symbol, q.settlement)] = book_from_row(q)
 
     view = MarketView(books=books, today=today, next_bd=next_business_day(today))

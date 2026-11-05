@@ -217,6 +217,10 @@ El endpoint de Bull Market (`/Clients/MarketPrices/GetStockPrices`) ya soporta `
 * `MARKET_HOURS_ONLY` (`true`): consultar cotizaciones solo en días hábiles y en horario de rueda (según BYMA), hasta 25 min después del cierre.
 * `REFERENCE_REFRESH_HOUR` / `REFERENCE_REFRESH_MINUTE` (`10:15` ART): actualización diaria de CompararBonos + BCRA (L-V; también al iniciar si los datos no son del día).
 * `COMMISSION_PCT` (`0.11`), `MIN_NET_PROFIT_PCT` (`0.40`), `TRADE_SIZE_USD` (`500`): parámetros operativos por defecto.
+* `BULLMARKET_ENABLED` (`true`): usar Bull Market en tiempo real si hay sesión.
+* `BULLMARKET_COOKIE_FILE` (`secrets/bullmarket_cookie.txt`): dónde se guarda la cookie que se pega en el dashboard (carpeta ignorada por git).
+* `BULLMARKET_COOKIE`: alternativa en el `.env` (se usa si el archivo no existe). **Nunca** en el código.
+* `BULLMARKET_MAX_AGE_SECONDS` (`180`): antigüedad máxima de la última consulta OK de Bull Market para usar sus puntas; si no, se vuelve a BYMA.
 
 ---
 
@@ -276,3 +280,17 @@ Reglas de seguridad (para evitar falsas alarmas):
 Señales persistentes: clave `estrategia|venta|compra|acción`; mientras siga vigente es la misma fila (`first_seen`, `last_seen`, `net_profit_pct`, `confirmation` = `DEMORA_20MIN` con BYMA). Las señales v1.0 sin clave se expiran al primer ciclo. `db/migrations.py` agrega columnas nuevas a bases existentes sin tocar datos.
 
 Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `GET /arbitrage/ratios`, `GET|PUT /settings/trading`. Dashboard: pestañas "CI vs 24hs" y "Dólar implícito", panel de parámetros, ratios de curva y tarjetas con ganancia neta / origen del dato / "activa desde".
+
+### Etapa 4 — Bull Market en tiempo real (2026-11-05)
+
+* `data/bullmarket_client.py`: `GET /Clients/MarketPrices/GetStockPrices?term=1|2&index=bonos` con la cookie de sesión del trader (5 niveles de puntas; `index` parametrizado para acciones/CEDEARs en el futuro). Sin login automático.
+* Sesión vencida: HTTP 401/403, redirección 3xx (verificado: Bull Market responde **302** con una cookie inválida) o página HTML ⇒ `VENCIDA`; se deja de consultar hasta que se pegue una cookie nueva. Errores de red/5xx ⇒ `ERROR`, se reintenta.
+* `services/bullmarket_session.py`: normaliza lo pegado (valor del encabezado `cookie`, con o sin prefijo, o "Copiar como cURL"), lo guarda en `secrets/` y **nunca** lo devuelve por la API ni lo registra en logs.
+* Libros: `book_quotes.depth` (JSON con los 5 niveles; migración automática). `walk_book` recorre toda la profundidad para el tamaño configurado.
+* Prioridad de fuentes: Bull Market > BYMA por especie/plazo, solo si la última consulta OK de Bull Market tiene < `BULLMARKET_MAX_AGE_SECONDS` y la especie vino en esa respuesta.
+* Confirmación de señales según las patas: `TIEMPO_REAL` (todas Bull Market), `PARCIAL` (mezcla), `DEMORA_20MIN` (todas BYMA).
+* Bull Market se consulta solo durante la rueda (5 min antes de la apertura hasta 2 min después del cierre); BYMA sigue con su ventana extendida por la demora.
+* Endpoints: `GET|PUT|DELETE /bullmarket/session`; `/status` incluye `bullmarket`; `/books?source=BULLMARKET` devuelve `depth`; Command Center informa `book_sources`.
+* Dashboard: panel "Bull Market · tiempo real" (pegar cookie, estado, instrucciones), estado en el encabezado y etiqueta "Parcial" en las señales.
+* Tests: `test_stage4_bullmarket.py` (fixture recortado de una respuesta real, solo datos de mercado; nunca se usa la cookie real).
+

@@ -17,7 +17,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.arbitrage.market_view import MarketView
+from backend.app.arbitrage.market_view import MarketView, combined_source
 from backend.app.db.models import PriceSnapshot
 from backend.app.services.market_calendar import ART
 from backend.app.services.trading_settings import TradingParams
@@ -51,6 +51,7 @@ class PairRatio:
     price_a: Optional[Tuple[Optional[float], Optional[float]]] = None   # (compradora, vendedora)
     price_b: Optional[Tuple[Optional[float], Optional[float]]] = None
     notes: List[str] = field(default_factory=list)
+    source: str = "BYMA"
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -127,6 +128,7 @@ def compute_pair_ratios(db: Session, view: MarketView, params: TradingParams,
                     z_score=z, hist_mean=round(z_mean, 4) if z_mean else None,
                     hist_std=round(z_std, 4) if z_std else None, calibration=calib,
                     price_a=(ba.best_bid, ba.best_ask), price_b=(bb.best_bid, bb.best_ask), notes=notes,
+                    source=combined_source(ba, bb),
                 ))
     return out
 
