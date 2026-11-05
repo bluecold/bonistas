@@ -100,6 +100,8 @@ async def lifespan(app: FastAPI):
     # 2. Sembrar catálogo inicial
     db = SessionLocal()
     try:
+        from backend.app.services import holiday_service
+        logger.info(f"Feriados cargados en el calendario: {holiday_service.load_into_calendar(db)}")
         count = ingestion_service.seed_initial_bonds(db)
         logger.info(f"Catálogo verificado. {count} bonos sembrados.")
 
@@ -108,6 +110,8 @@ async def lifespan(app: FastAPI):
             logger.info("Ingesta inicial omitida (SKIP_STARTUP_INGESTION).")
         else:
             try:
+                if holiday_service.is_stale(db):
+                    logger.info(f"Feriados (MAE): {await holiday_service.refresh(db)}")
                 if reference_is_stale(db):
                     logger.info("Actualizando datos de referencia (CompararBonos + BCRA)...")
                     await reference_service.refresh(db)

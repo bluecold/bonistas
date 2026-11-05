@@ -187,6 +187,9 @@ class ReferenceDataService:
     # ------------------------------------------------------------------ ingesta
     async def refresh(self, db: Session) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
+        # Feriados primero: afectan la liquidación de 24hs y el corte de cupón
+        from backend.app.services import holiday_service
+        result["holidays"] = await holiday_service.refresh(db)
 
         try:
             refs, meta = await self.comparar.fetch_reference()

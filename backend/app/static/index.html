@@ -1070,6 +1070,10 @@
                 else if (st.market.polling_active) { label = `Rueda abierta · BYMA ${st.market.opening}-${st.market.closing}`; tone = 'emerald'; }
                 else { label = `Mercado cerrado · abre ${st.market.opening}`; tone = 'slate'; }
                 if (bm && bm.status === 'ACTIVA') label += ' · Bull Market en vivo';
+                const hol = st.holidays || [];
+                const fmtD = iso => new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {weekday: 'short', day: 'numeric', month: 'numeric'});
+                const nextAr = hol.find(h => h.country === 'AR');
+                if (nextAr && (new Date(nextAr.date + 'T12:00:00') - new Date()) / 86400000 <= 7) label += ` · feriado ${fmtD(nextAr.date)}`;
                 if (bm && bm.status === 'VENCIDA') { label += ' · sesión Bull Market vencida'; tone = 'amber'; }
                 if (down.length) { label += ` · fuente caída: ${down.join(', ')}`; tone = 'amber'; }
                 const tones = {
@@ -1083,6 +1087,8 @@
                 const fmt = iso => iso ? new Date(iso).toLocaleTimeString('es-AR') : 'nunca';
                 badge.title = sources.length
                     ? sources.map(s => `${s.name}: ${s.healthy ? 'OK' : 'ERROR'} · última OK ${fmt(s.last_success)}${s.last_error && !s.healthy ? ' · ' + s.last_error : ''}`).join('\n')
+                        + (st.settlement_24hs ? `\n\n24hs liquida: ${fmtD(st.settlement_24hs)}` : '')
+                        + (hol.length ? '\nPróximos feriados: ' + hol.map(h => `${fmtD(h.date)} ${h.country === 'US' ? '🇺🇸' : '🇦🇷'} ${h.name}`).join(' · ') : '')
                         + '\n\nBYMA Open Data publica con 20 min de demora; Bull Market, en tiempo real.'
                     : 'Sin consultas todavía';
             } catch (err) {

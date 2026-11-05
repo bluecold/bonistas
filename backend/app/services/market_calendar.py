@@ -51,17 +51,35 @@ class MarketWindow:
         }
 
 
+# Feriados de Argentina (sin rueda ni liquidación). Se cargan desde la base (tabla
+# market_holidays, fuente MAE) al iniciar y en cada actualización diaria de referencia.
+_AR_HOLIDAYS: set = set()
+
+
+def set_ar_holidays(days) -> None:
+    global _AR_HOLIDAYS
+    _AR_HOLIDAYS = set(days)
+
+
+def ar_holidays() -> set:
+    return set(_AR_HOLIDAYS)
+
+
+def is_business_day(d: date) -> bool:
+    return d.weekday() < 5 and d not in _AR_HOLIDAYS
+
+
 def next_business_day(d: date) -> date:
-    """Siguiente día hábil (solo saltea fines de semana; los feriados los informa BYMA día a día)."""
+    """Siguiente día hábil: saltea fines de semana y feriados de Argentina (MAE)."""
     nxt = d + timedelta(days=1)
-    while nxt.weekday() >= 5:
+    while not is_business_day(nxt):
         nxt += timedelta(days=1)
     return nxt
 
 
 def previous_business_day(d: date) -> date:
     nxt = d - timedelta(days=1)
-    while nxt.weekday() >= 5:
+    while not is_business_day(nxt):
         nxt -= timedelta(days=1)
     return nxt
 
@@ -69,12 +87,12 @@ def previous_business_day(d: date) -> date:
 def ex_date(payment: date) -> date:
     """
     Primer día de liquidación que ya NO cobra el pago ("ex-cupón"): el día hábil anterior a la
-    fecha efectiva de pago (si el pago cae en fin de semana, se paga el día hábil siguiente).
+    fecha efectiva de pago (si el pago cae en fin de semana o feriado, se paga el día hábil siguiente).
     Verificado con TX28 (pago lun 9/11/2026): la operación en 24hs que liquida el vie 6/11 ya
     cotizaba ex-cupón, y la de CI que liquida el jue 5/11 todavía incluía el pago.
     """
     effective = payment
-    while effective.weekday() >= 5:
+    while not is_business_day(effective):
         effective += timedelta(days=1)
     return previous_business_day(effective)
 
@@ -94,7 +112,7 @@ class MarketCalendar:
             window = MarketWindow(today, mt.is_working_day, mt.opening, mt.closing, "BYMA")
         except Exception as e:
             logger.warning(f"No se pudo consultar el horario de BYMA, se asume L-V 10:30-17:00: {e}")
-            window = MarketWindow(today, today.weekday() < 5, DEFAULT_OPEN, DEFAULT_CLOSE, "FALLBACK")
+            window = MarketWindow(today, is_business_day(today), DEFAULT_OPEN, DEFAULT_CLOSE, "FALLBACK")
         self._cached = window
         return window
 

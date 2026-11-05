@@ -155,6 +155,15 @@ def _install_offline_sources(monkeypatch):
 
     monkeypatch.setattr(MercadosArgentinaClient, "fetch_schedules", fake_ma_schedules)
 
+    # --- MAE: feriados (respuesta real del 05/11/2026)
+    from backend.app.data.mae_client import MaeClient
+    mae = _load("mae_feriados.json")
+
+    async def fake_mae(self):
+        return [dict(x) for x in mae]
+
+    monkeypatch.setattr(MaeClient, "fetch_raw", fake_mae)
+
     # Red de seguridad: aunque algún test construya un WindowsToastNotifier, no lanza PowerShell
     from backend.app.services.notifier import WindowsToastNotifier
     monkeypatch.setattr(WindowsToastNotifier, "send", lambda self, title, message, url=None: False)
@@ -163,6 +172,9 @@ def _install_offline_sources(monkeypatch):
 @pytest.fixture(autouse=True)
 def offline_sources(request, monkeypatch):
     """Reemplaza las fuentes externas por datos de fixtures (salvo en tests de red)."""
+    # Cada test arranca sin feriados en el calendario (los tests de feriados los cargan explícitamente)
+    from backend.app.services.market_calendar import set_ar_holidays
+    set_ar_holidays([])
     if request.node.get_closest_marker("network"):
         return
     _install_offline_sources(monkeypatch)

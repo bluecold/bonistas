@@ -202,10 +202,14 @@ def get_books(
 
 
 @router.get("/status", tags=["Health"])
-async def get_status():
+async def get_status(db: Session = Depends(get_db)):
     """Estado de las fuentes de datos y del horario de mercado (para el dashboard)."""
+    from backend.app.services import holiday_service
     window = await market_calendar.today()
+    today = date.fromisoformat(window.to_dict()["date"])
     return {
+        "settlement_24hs": next_business_day(today).isoformat(),
+        "holidays": holiday_service.upcoming(db, today),
         "market": window.to_dict(),
         "market_hours_only": settings.MARKET_HOURS_ONLY,
         "polling_interval_seconds": settings.POLLING_INTERVAL_SECONDS,

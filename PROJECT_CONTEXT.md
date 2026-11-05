@@ -352,3 +352,12 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Resguardo por precio (`ci_24hs.py`): CompararBonos ya no lista un pago cortado para su propia liquidación, así que puede faltar en los flujos. Si la brecha bruta CI/24hs es ≥ 3% y ya existía al cierre anterior (≥ 50%), o si es ≥ 10%, el estado pasa a `CORTE_PROBABLE` y no hay señal (dashboard: "⚠ corte").
 * Verificación de la conexión: 427 libros de Bull Market (156 con 5 niveles), mismas unidades que BYMA y mismo bono base en las 246 especies comparables. Con la demora de 20 min, BYMA mostraba puntas de pre-apertura (AL30D compradora 47,99 vs 52,40 en Bull Market).
 
+### Feriados de mercado (MAE) en el calendario (2026-11-05)
+
+* `data/mae_client.py`: `api.marketdata.mae.com.ar/api/mercado/feriados` (próximos feriados con país `ar`/`us` y fecha sin año: el año se infiere como la próxima ocurrencia).
+* Tabla `market_holidays` (se conservan los pasados) y `services/holiday_service.py`: se descarga al iniciar si no es del día y en la actualización diaria de referencia; si MAE falla, se siguen usando los guardados.
+* `market_calendar`: `is_business_day`, `next_business_day`, `previous_business_day` y `ex_date` saltean feriados de Argentina. Afecta liquidación 24hs, días de caución en CI vs 24hs y corte de cupón (pago en feriado ⇒ se paga el día hábil siguiente; corte = día hábil anterior).
+* Feriados de EE.UU.: informativos (poco volumen en activos ligados al exterior; más relevante para CEDEARs).
+* Ejemplo real: lunes 9/11/2026 feriado ⇒ el viernes 6/11, 24hs liquida el martes 10/11 (4 días de caución). Los "días no laborables con fin turístico" (ej. 7/12) se tratan como sin liquidación.
+* `/status` informa `settlement_24hs` y los próximos feriados; el indicador del encabezado avisa un feriado dentro de 7 días y el tooltip los lista.
+

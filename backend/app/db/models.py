@@ -222,3 +222,14 @@ class Alert(Base):
     notified = Column(Boolean, default=False)        # se mostró notificación de Windows
     read = Column(Boolean, default=False)
 
+
+class MarketHoliday(Base):
+    """Feriados de mercado (fuente MAE). AR: sin rueda ni liquidación. US: poco volumen externo."""
+    __tablename__ = "market_holidays"
+
+    day = Column(Date, primary_key=True)
+    country = Column(String(2), primary_key=True)     # 'AR' | 'US'
+    name = Column(String(120), nullable=True)
+    source = Column(String(20), nullable=False, default="MAE")
+    fetched_at = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc))
+
