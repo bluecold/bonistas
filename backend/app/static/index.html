@@ -589,7 +589,7 @@
                         <h2 class="text-lg font-bold text-white">Primeros pasos</h2>
                         <ol class="space-y-3">
                             <li class="flex gap-3"><span class="guide-step">1</span><div><b class="text-white">Revisá tus parámetros</b> en <a class="guide-go" data-tab="tab-arbitrage">Command Center</a>: costo por operación (todo incluido), ganancia neta mínima y tamaño de operación en USD. Todo se recalcula al guardar.</div></li>
-                            <li class="flex gap-3"><span class="guide-step">2</span><div><b class="text-white">Conectá Bull Market (opcional, recomendado).</b> Sin esto las puntas vienen de BYMA con <b>20 minutos de demora</b>. Pegá la cookie de tu sesión en el panel "Bull Market · tiempo real" (en el mismo panel están los pasos para copiarla). Cuando venza, la app te avisa.</div></li>
+                            <li class="flex gap-3"><span class="guide-step">2</span><div><b class="text-white">Conectá Bull Market (opcional, recomendado).</b> Sin esto las puntas vienen de BYMA con <b>20 minutos de demora</b>. Pegá el encabezado <code>cookie</code> completo de tu sesión en el panel "Bull Market · tiempo real" (ahí están los pasos para copiarlo). Pegalo <b>solo ahí</b>, nunca en chats ni capturas. Con la sesión activa la app también descarga, una vez por día, los cronogramas de pago de los bonos. Cuando la sesión venza, te avisa.</div></li>
                             <li class="flex gap-3"><span class="guide-step">3</span><div><b class="text-white">Configurá las alertas</b> en la campanita 🔔 de arriba a la derecha. Sugerencia: activá <i>"Solo confirmadas en tiempo real"</i> para que Windows te avise únicamente lo accionable. Usá <i>"Probar aviso"</i> para comprobar que las notificaciones se ven.</div></li>
                             <li class="flex gap-3"><span class="guide-step">4</span><div><b class="text-white">Dejá la app corriendo durante la rueda.</b> Consulta el mercado cada minuto, solo en días hábiles y en horario de mercado. No hace falta tener esta pestaña abierta para recibir las notificaciones de Windows.</div></li>
                             <li class="flex gap-3"><span class="guide-step">5</span><div><b class="text-white">Cuando llegue una señal:</b> abrila, verificá precios en tu broker y ejecutá las dos patas lo más juntas posible (ver <a class="guide-go-sec" data-g="senal">Cómo leer una señal</a>).</div></li>
@@ -603,11 +603,11 @@
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="layout-grid" class="w-4 h-4"></i> Monitor de cotizaciones <a class="guide-go ml-auto" data-tab="tab-quotes">Abrir →</a></div>
                                 Todos los bonos con precio en pesos, MEP y cable, TIR, duration, paridad y valor técnico. Filtrá por familia o buscá un ticker. <b>Ficha</b> muestra el cronograma de pagos; <b>Swap</b> lo lleva al simulador.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="line-chart" class="w-4 h-4"></i> Curvas de rendimiento <a class="guide-go ml-auto" data-tab="tab-curves">Abrir →</a></div>
-                                Curvas por familia (soberanos, tasa fija, CER, provinciales, dollar linked, TAMAR/duales). La tabla de <b>desvíos</b> muestra qué bonos rinden más (verde, relativamente baratos) o menos (rojo, caros) que su curva: ideas para rotar. <b>Argentina vs región</b> muestra el riesgo país por tramo.</div>
+                                Curvas por familia (soberanos, tasa fija, CER, provinciales, dollar linked, TAMAR/duales). La tabla de <b>desvíos</b> muestra qué bonos rinden más (verde, relativamente baratos) o menos (rojo, caros) que su curva: ideas para rotar. <b>Argentina vs región</b> muestra el riesgo país por tramo. En los bonos en dólares podés ver la TIR en <b>MEP o en cable</b> (la diferencia es el canje).</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="target" class="w-4 h-4"></i> Command Center <a class="guide-go ml-auto" data-tab="tab-arbitrage">Abrir →</a></div>
                                 El centro operativo: parámetros, conexión con Bull Market, <b>señales activas</b>, matriz de prima de legislación AL/GD, ratios entre bonos de la curva y estrategias de valor relativo y breakeven de inflación.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="clock" class="w-4 h-4"></i> CI vs 24hs <a class="guide-go ml-auto" data-tab="tab-ci">Abrir →</a></div>
-                                Para cada especie compara Contado Inmediato contra 24hs en las dos direcciones: bruto, costos, caución, ajuste por cupón y neto. En verde, las que superan tu mínimo con profundidad suficiente.</div>
+                                Para cada especie compara Contado Inmediato contra 24hs en las dos direcciones: bruto, costos, caución, ajuste por cupón y neto. En verde, las que superan tu mínimo con profundidad suficiente. <b>¿?</b> = sin cronograma confiable cerca de un pago; <b>⚠ corte</b> = brecha que es un pago no informado, no un arbitraje. Ninguno de los dos genera señal.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="dollar-sign" class="w-4 h-4"></i> Dólar implícito <a class="guide-go ml-auto" data-tab="tab-fx">Abrir →</a></div>
                                 El dólar MEP o cable que obtenés operando cada bono (comprando en pesos y vendiendo en dólares, o al revés), con costos. Te dice con qué bono conviene comprar o vender dólares y si una ida y vuelta entre dos bonos deja ganancia.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="arrow-left-right" class="w-4 h-4"></i> Simulador de swaps <a class="guide-go ml-auto" data-tab="tab-swap">Abrir →</a></div>
@@ -643,8 +643,9 @@
                     <section data-gs="glosario" class="guide-sec hidden space-y-3">
                         <h2 class="text-lg font-bold text-white">Glosario</h2>
                         <dl class="grid md:grid-cols-2 gap-x-6 gap-y-3 text-xs">
-                            <div><dt class="guide-dt">CI / 24hs</dt><dd>Plazos de liquidación: Contado Inmediato liquida hoy; 24hs, el próximo día hábil (un viernes, el lunes).</dd></div>
-                            <div><dt class="guide-dt">Corte de cupón</dt><dd>Si un bono paga renta o amortización entre las dos liquidaciones, el precio de 24hs ya no la incluye. La app descuenta ese pago; sin cronograma conocido (¿?) no genera señal.</dd></div>
+                            <div><dt class="guide-dt">CI / 24hs</dt><dd>Plazos de liquidación: Contado Inmediato liquida hoy; 24hs, el próximo día hábil (un viernes, el lunes; si el lunes es feriado, el martes). La app usa los feriados que publica MAE.</dd></div>
+                            <div><dt class="guide-dt">Corte de cupón</dt><dd>El pago lo cobra quien liquida antes del <b>día hábil anterior al pago</b>. Ej.: un bono que paga el lunes ya cotiza "ex-cupón" en 24hs el jueves (liquida el viernes). Si el corte cae entre CI y 24hs, la app descuenta el pago; sin cronograma conocido (¿?) no genera señal.</dd></div>
+                            <div><dt class="guide-dt">Cronograma verificado</dt><dd>Fechas y montos de pago en los que coinciden al menos dos fuentes (CompararBonos, Bull Market, Mercados Argentina, Bruno618).</dd></div>
                             <div><dt class="guide-dt">Especies D y C</dt><dd>El mismo bono cotizado en dólares MEP (D, ej. AL30D) o en dólares cable (C, ej. AL30C). Sin sufijo: en pesos.</dd></div>
                             <div><dt class="guide-dt">MEP / CCL / Canje</dt><dd>Dólar que surge de comprar un bono en pesos y venderlo en dólares locales (MEP) o en el exterior (cable). Canje = diferencia entre cable y MEP.</dd></div>
                             <div><dt class="guide-dt">Ley local vs NY</dt><dd>Bonares (AL, AE) se rigen por ley argentina; Globales (GD), por ley de Nueva York. Mismos flujos; la ley NY suele cotizar con prima.</dd></div>
@@ -668,9 +669,11 @@
                             <thead class="text-slate-500 uppercase text-[10px]"><tr><th class="text-left py-1">Fuente</th><th class="text-left">Para qué</th><th class="text-left">Demora</th></tr></thead>
                             <tbody class="divide-y divide-brand-border/60">
                                 <tr><td class="py-1.5 text-white">BYMA Open Data</td><td>Puntas CI/24hs, cauciones, horario de mercado</td><td class="text-amber-300">20 min</td></tr>
-                                <tr><td class="py-1.5 text-white">Bull Market (tu sesión)</td><td>Puntas con 5 niveles de profundidad</td><td class="text-emerald-300">Tiempo real</td></tr>
+                                <tr><td class="py-1.5 text-white">Bull Market (tu sesión)</td><td>Puntas con 5 niveles de profundidad; cronogramas de pago</td><td class="text-emerald-300">Tiempo real</td></tr>
                                 <tr><td class="py-1.5 text-white">Bonistas.com</td><td>TIR, duration, paridad, valor técnico</td><td>Intradiario</td></tr>
                                 <tr><td class="py-1.5 text-white">CompararBonos</td><td>Flujos de pago y clasificación de bonos</td><td>Diario</td></tr>
+                                <tr><td class="py-1.5 text-white">Mercados Argentina · Bruno618</td><td>Cronogramas de provinciales (verificación por consenso)</td><td>Diario</td></tr>
+                                <tr><td class="py-1.5 text-white">MAE</td><td>Feriados de mercado (Argentina y EE.UU.)</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">BCRA</td><td>CER, TAMAR, dólar A3500</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">DolarAPI</td><td>Dólar MEP, CCL y oficial de referencia</td><td>Intradiario</td></tr>
                             </tbody>
@@ -679,7 +682,8 @@
                             <li>Las cotizaciones se consultan cada minuto, <b>solo en días hábiles y en horario de rueda</b>. Fuera de horario se muestra el último cierre.</li>
                             <li>La cookie de Bull Market se guarda solo en esta PC (carpeta <code>secrets/</code>) y nunca se muestra. La app no usa tu usuario ni tu contraseña.</li>
                             <li>Las reglas estadísticas (z-score) necesitan unas 20 ruedas de uso para tener historia propia; hasta entonces se muestran como dato informativo.</li>
-                            <li>Bonos sin cronograma de pagos conocido aparecen en las tablas, pero nunca generan señales.</li>
+                            <li>Bonos sin cronograma de pagos conocido aparecen en las tablas, pero nunca generan señales. Cerca de un pago, tampoco los que tienen el cronograma de una sola fuente sin verificar.</li>
+                            <li>Las fuentes a veces omiten un pago inminente; por eso la app los busca en Bull Market y, además, descarta las brechas CI/24hs que ya existían al cierre anterior.</li>
                         </ul>
                         <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-200">
                             Herramienta de análisis de uso personal. <b>No es asesoramiento financiero</b> ni ejecuta órdenes. Los cálculos pueden tener errores o basarse en datos desactualizados: verificá siempre en tu broker antes de operar.

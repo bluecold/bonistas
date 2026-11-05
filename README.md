@@ -18,13 +18,15 @@ Cuando aparece una oportunidad que supera la ganancia neta mínima, avisa con un
 
 | | |
 |---|---|
-| **CI vs 24hs** | Para cada especie con puntas en ambos plazos calcula las dos direcciones. **Vender CI / comprar 24hs:** `(compradora CI − cupón) / vendedora 24hs − 1`. **Comprar CI / vender 24hs:** `(compradora 24hs + cupón) / vendedora CI − 1`, menos la caución por los días entre liquidaciones. A las dos les resta el costo de las dos operaciones. Si el bono paga renta o amortización entre las dos liquidaciones, el pago se descuenta; si no hay cronograma conocido, **no se emite señal**. |
+| **CI vs 24hs** | Para cada especie con puntas en ambos plazos calcula las dos direcciones. **Vender CI / comprar 24hs:** `(compradora CI − cupón) / vendedora 24hs − 1`. **Comprar CI / vender 24hs:** `(compradora 24hs + cupón) / vendedora CI − 1`, menos la caución por los días entre liquidaciones. A las dos les resta el costo de las dos operaciones. El **corte de cupón** es el día hábil anterior al pago: si el corte cae entre las dos liquidaciones, el pago se descuenta. Sin cronograma conocido **no se emite señal**, y una brecha enorme o que ya existía al cierre anterior se marca **"⚠ corte"** (probable pago no informado), nunca como oportunidad. |
 | **Dólar implícito** | TC de compra y de venta de dólares con cada bono (pesos ↔ D/C), con puntas y costos, en todas las combinaciones de plazo. Muestra la mejor ida y vuelta entre bonos. |
 | **Ratios** | AL/GD y pares de curva (AE38/GD35, GD38/GD41, …), con los nominales que se obtienen al rotar ya descontados los costos. El z-score se calcula con la historia diaria real: las reglas estadísticas solo actúan con ≥ 20 ruedas. |
+| **Cronogramas** | Flujos de cada bono por **consenso** entre CompararBonos, Bull Market, Mercados Argentina y Bruno618: un cronograma queda *verificado* cuando dos fuentes coinciden. Además, una vez por día se agregan los **pagos próximos** que la referencia no lista (por ejemplo, un cupón que vence en días). |
+| **Calendario** | **Feriados** de Argentina (MAE) en la liquidación de 24hs, los días de caución y el corte de cupón. Los de EE.UU. se informan. |
 | **Profundidad** | Recorre el libro hasta cubrir el **tamaño de operación** configurado (USD 500 por defecto). Si la punta no alcanza, no hay señal. |
 | **Tiempo real** | Puntas de **BYMA Open Data**, con 20 min de demora, y, opcionalmente, de **Bull Market** en tiempo real con 5 niveles, usando la sesión del propio usuario. Cada señal indica de dónde salieron sus precios: *confirmada en tiempo real*, *parcial* o *demora 20 min*. |
 | **Alertas** | Notificación de Windows y panel en el dashboard para oportunidades nuevas, oportunidades confirmadas en tiempo real, sesión vencida y fuentes caídas, con un período de silencio contra las puntas que oscilan. |
-| **Curvas** | Por familia: soberanos USD (Bonares vs Globales y BOPREAL), tasa fija (TEM vs. días), CER (TIR real), provinciales, dollar linked y TAMAR/duales. Cada una tiene su curva ajustada y el **desvío de cada bono en puntos básicos** (cuánto rinde de más o de menos que sus vecinos). Incluye **Argentina vs. región** con el spread contra Treasuries por tramo. |
+| **Curvas** | Por familia: soberanos USD (Bonares vs Globales y BOPREAL), tasa fija (TEM vs. días), CER (TIR real), provinciales, dollar linked y TAMAR/duales. Cada una tiene su curva ajustada y el **desvío de cada bono en puntos básicos** (cuánto rinde de más o de menos que sus vecinos). Incluye **Argentina vs. región** con el spread contra Treasuries por tramo. La TIR de los bonos en dólares se puede ver **en MEP o en cable**. |
 | **Analítica** | TIR, duration modificada, valor técnico, paridad, breakeven de inflación (tasa fija vs. CER) y simulador de swaps entre bonos. |
 | **Parámetros** | Costo por operación (0,11% todo incluido), ganancia neta mínima (0,40%) y tamaño de operación, **editables desde el dashboard**. |
 
@@ -100,17 +102,20 @@ Abrí **http://127.0.0.1:8050**. La documentación de la API está en `/docs`.
 
 Al iniciar, el servidor:
 1. crea o migra la base SQLite (`bonistas.db`) sin perder datos;
-2. descarga los datos de referencia del día (flujos de CompararBonos, CER/TAMAR/A3500 del BCRA);
-3. consulta las cotizaciones y evalúa las estrategias.
+2. carga los feriados de mercado (MAE);
+3. descarga los datos de referencia del día: flujos y clasificación de CompararBonos, cronogramas de provinciales (Bruno618 y Mercados Argentina), CER/TAMAR/A3500 del BCRA;
+4. consulta las cotizaciones y evalúa las estrategias.
 
-Después repite el ciclo **cada 60 segundos, solo en horario de rueda**.
+Después repite el ciclo **cada 60 segundos, solo en horario de rueda**. La referencia se actualiza todos los días hábiles a las 10:15.
 
 ### Bull Market en tiempo real (opcional)
 1. Iniciá sesión en Bull Market en el navegador y abrí *Cotizaciones → Bonos*.
 2. F12 → **Red** → buscá la petición `GetStockPrices` → copiá el encabezado `cookie` (o "Copiar como cURL").
-3. Pegalo en el panel **Bull Market · tiempo real** del Command Center y tocá **Guardar y probar**.
+3. Pegalo en el panel **Bull Market · tiempo real** del Command Center y tocá **Guardar y probar**. Tiene que ser el encabezado completo (`nombre=valor; nombre2=valor2; …`), no el valor de una sola cookie.
 
-La cookie se guarda **solo en tu PC** (`secrets/bullmarket_cookie.txt`, ignorado por git) y la API nunca la devuelve. El sistema **no inicia sesión por vos** ni usa tu usuario o contraseña. Cuando la sesión vence, avisa y sigue funcionando con BYMA.
+Con la sesión activa, la app consulta las puntas cada minuto durante la rueda y, una vez por día, los **cronogramas de pago** de todos los bonos. En la práctica, el polling mantiene viva la sesión.
+
+La cookie se guarda **solo en tu PC** (`secrets/bullmarket_cookie.txt`, ignorado por git) y la API nunca la devuelve. **Pegala únicamente en ese panel**: no la compartas en chats, issues ni capturas. El sistema **no inicia sesión por vos** ni usa tu usuario o contraseña. Cuando la sesión vence, avisa y sigue funcionando con BYMA.
 
 ---
 
@@ -139,15 +144,16 @@ Lista completa en [PROJECT_CONTEXT.md §7](PROJECT_CONTEXT.md).
 | Fuente | Uso | Demora |
 |---|---|---|
 | [BYMA Open Data](https://open.bymadata.com.ar) | Puntas CI/24hs de todos los bonos, cauciones, horario de mercado | 20 min |
-| Bull Market (sesión del usuario) | Puntas con 5 niveles de profundidad | Tiempo real |
+| Bull Market (sesión del usuario) | Puntas con 5 niveles de profundidad; cronogramas de pago | Tiempo real / diario |
 | [Bonistas.com](https://bonistas.com) | TIR, duration, paridad, valor técnico | — |
 | [CompararBonos](https://compararbonos.com.ar) | Flujos de fondos y especies de cada bono | Diario |
 | [Bruno618](https://bruno618.com/herramientas/flujo-de-fondos-renta-fija) | Cronogramas de provinciales en dólares | Diario |
 | [Mercados Argentina](https://mercadosargentina.com.ar/renta-fija/titulos) | Cronogramas de provinciales (verificación por consenso) | Diario |
 | [API del BCRA](https://www.bcra.gob.ar) | CER, TAMAR, A3500 | Diario |
+| [MAE Market Data](https://api.marketdata.mae.com.ar/api/mercado/feriados) | Feriados de mercado (Argentina y EE.UU.) | Diario |
 | [DolarAPI](https://dolarapi.com) | Dólar MEP, CCL, oficial | — |
 
-Cada fuente se consulta con frecuencia moderada (una vez por minuto, en horario de rueda) y solo se guarda un registro nuevo cuando el dato cambió.
+Las cotizaciones se consultan una vez por minuto en horario de rueda, y solo se guarda un registro nuevo cuando el dato cambió. Las fuentes de referencia y cronogramas se consultan una vez por día, de a una página por vez y con pausas.
 
 ---
 
@@ -164,9 +170,11 @@ backend/
     │   ├── fx_implied.py       # Dólar implícito e ida y vuelta
     │   ├── ratios.py           # Ratios AL/GD y de curva, z-score histórico
     │   └── engine.py           # Orquestación, señales persistentes, Command Center
-    ├── data/                   # Clientes: BYMA, Bull Market, Bonistas, CompararBonos, BCRA, DolarAPI
+    ├── data/                   # Clientes: BYMA, Bull Market, Bonistas, CompararBonos, Bruno618,
+    │                           #   Mercados Argentina, BCRA, MAE, DolarAPI
     ├── quant/                  # Flujos, TIR, duration, valor técnico, swaps
-    ├── services/               # Ingesta, libros, calendario, sesión Bull Market, alertas, notificador
+    ├── services/               # Ingesta, libros, referencia y consenso de cronogramas, curvas,
+    │                           #   calendario y feriados, sesión Bull Market, alertas, notificador
     ├── db/                     # Modelos SQLAlchemy y migraciones mínimas
     └── static/index.html       # Dashboard (Tailwind + Plotly)
 ```
@@ -179,7 +187,7 @@ backend/
 .\.venv\Scripts\pytest backend/tests -q
 ```
 
-228 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
+250 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
 
 ---
 
