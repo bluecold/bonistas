@@ -752,3 +752,23 @@ def put_notification_settings(values: Dict[str, Any], db: Session = Depends(get_
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+
+
+# ==========================================
+# CURVAS DE RENDIMIENTO POR FAMILIA
+# ==========================================
+
+@router.get("/curves", tags=["Quant Analytics"])
+def get_curves(db: Session = Depends(get_db)):
+    """
+    Curvas agrupadas por familia (soberanos USD, tasa fija, CER, provinciales, dollar linked,
+    TAMAR/duales y Argentina vs región), con curva ajustada y desvío de cada bono en bps.
+    """
+    from backend.app.services.curves_service import build_curves
+    quotes = {q.ticker: q for q in ingestion_service.get_latest_quotes(db)}
+    prices = {}
+    for b in market_book_service.latest_books(db, source="BYMA", settlement="24HS"):
+        mid = (b.bid + b.ask) / 2.0 if b.bid and b.ask else b.last
+        if mid:
+            prices[b.symbol] = mid
+    return {"groups": [g.to_dict() for g in build_curves(db, quotes, book_prices=prices)]}

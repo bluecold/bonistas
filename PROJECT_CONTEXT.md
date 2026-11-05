@@ -309,3 +309,13 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Corrección: SQLite devolvía fechas sin zona horaria y el navegador las mostraba corridas 3 h ("activa desde", alertas). `db/types.py::UTCDateTime` devuelve siempre UTC con zona.
 * Tests: `test_stage5_alerts.py`. Los tests nunca muestran notificaciones reales (`WINDOWS_NOTIFICATIONS=false` + `send` anulado en conftest).
 
+### Curvas de rendimiento por familia (2026-11-05)
+
+* `services/curves_service.py` + `GET /curves`: reemplaza el gráfico único (mezclaba 341 especies: ONs, provinciales y las tres especies de cada bono).
+* Clasificación de CompararBonos (`tipo`): Soberanos USD (Bonares / Globales / BOPREAL), Tasa fija (LECAP/BONCAP/FIJA: TEM vs días), CER (solo TIR real), Provinciales USD, Dollar linked, TAMAR y duales, y Argentina vs región (soberanos LatAm + Treasuries). Las ONs no entran.
+* Un punto por bono: TIR/MD de Bonistas de la especie preferida (D para USD); si no hay, CompararBonos; si tampoco, **TIR propia** con flujos de CompararBonos + precio medio de BYMA 24hs (precio sucio, liquidación T+1).
+* Curva ajustada `y = a + b·ln(x) (+ c·ln(x)²` con ≥ 5 puntos, para captar la joroba soberana). Desvío = observado − ajustado en pb (positivo = relativamente barato).
+* Región: spread vs Treasuries interpolado a la misma duration (riesgo país por tramo: Globales ~600–830 pb el 04/11).
+* Exclusiones informadas: < 20 días al vencimiento, TIR fuera de [−30%, 80%], sin TIR ni flujos (hoy la mayoría de los provinciales: CompararBonos no publica sus flujos).
+* Dashboard: selector por familia, etiquetas opcionales, tooltip completo, tabla de desvíos y lista de excluidos.
+

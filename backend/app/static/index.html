@@ -137,7 +137,7 @@
             </button>
             <button onclick="switchTab('tab-curves', this)" id="tab-btn-curves" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="line-chart" class="w-4 h-4"></i>
-                <span>Curvas de Rendimiento (Plotly)</span>
+                <span>Curvas de Rendimiento</span>
             </button>
             <button onclick="switchTab('tab-arbitrage', this)" id="tab-btn-arbitrage" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="target" class="w-4 h-4"></i>
@@ -219,23 +219,32 @@
         <!-- TAB 2: CURVAS DE RENDIMIENTO (PLOTLY) -->
         <!-- ========================================== -->
         <section id="tab-curves" class="hidden space-y-4">
-            <div class="flex flex-wrap items-center justify-between gap-3 bg-brand-card p-3 rounded-xl border border-brand-border shadow-sm">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wide">Curva:</span>
-                    <button onclick="renderYieldCurve('HARD_DOLLAR', this)" id="btn-curve-hd" class="curve-btn active px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 transition">Hard Dollar (AL vs GD)</button>
-                    <button onclick="renderYieldCurve('TASA_FIJA', this)" id="btn-curve-tf" class="curve-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Tasa Fija / Letras</button>
-                    <button onclick="renderYieldCurve('CER', this)" id="btn-curve-cer" class="curve-btn px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Curva CER (Real)</button>
-                </div>
-                <div class="text-xs font-sans text-slate-400 flex items-center gap-4">
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Ley Local (Bonares)</span>
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Ley NY (Globales)</span>
-                    <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-emerald-500"></span> Curva Teórica (Spline)</span>
-                </div>
+            <div class="flex flex-wrap items-center gap-2 bg-brand-card p-3 rounded-xl border border-brand-border shadow-sm">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wide mr-1">Curva:</span>
+                <div id="curve-group-btns" class="flex flex-wrap gap-2"></div>
+                <label class="ml-auto flex items-center gap-1.5 text-xs text-slate-400"><input type="checkbox" id="curve-labels" checked onchange="renderYieldCurve(currentCurve)"> Etiquetas</label>
             </div>
 
-            <!-- Plotly Container -->
-            <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl relative min-h-[620px]">
-                <div id="plotly-curve-div" style="width: 100%; height: 580px;"></div>
+            <div class="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4">
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
+                    <div id="curve-title" class="text-sm font-bold text-white"></div>
+                    <div id="curve-desc" class="text-xs text-slate-400 mb-2"></div>
+                    <div id="plotly-curve-div" style="width: 100%; height: 520px;"></div>
+                    <div id="curve-notes" class="text-[11px] text-slate-500 mt-2 space-y-0.5"></div>
+                </div>
+                <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl text-xs flex flex-col">
+                    <div id="curve-table-title" class="font-bold text-white mb-1">Desvío contra la curva</div>
+                    <div id="curve-table-sub" class="text-slate-500 mb-2">En puntos básicos de TIR. Positivo = rinde más que sus vecinos.</div>
+                    <div class="overflow-y-auto max-h-[480px]">
+                        <table class="w-full font-mono">
+                            <thead class="text-slate-500 text-[10px] uppercase"><tr>
+                                <th class="text-left py-1">Bono</th><th class="text-right" id="curve-th-x">MD</th><th class="text-right" id="curve-th-y">TIR</th><th class="text-right" id="curve-th-r">Desvío</th>
+                            </tr></thead>
+                            <tbody id="curve-table-body" class="divide-y divide-brand-border/50"></tbody>
+                        </table>
+                    </div>
+                    <div id="curve-excluded" class="text-[10px] text-slate-500 mt-3"></div>
+                </div>
             </div>
         </section>
 
@@ -569,7 +578,7 @@
     <script>
         let allQuotes = [];
         let currentFilter = 'ALL';
-        let currentCurve = 'HARD_DOLLAR';
+        let currentCurve = 'SOBERANOS_USD';
         let currentSort = { column: 'ticker', asc: true };
         let activeModalTicker = '';
 
@@ -620,7 +629,7 @@
 
             if (tabId === 'tab-curves') {
                 setTimeout(() => {
-                    renderYieldCurve(currentCurve);
+                    renderYieldCurve(currentCurve, null, true);
                 }, 50);
             } else if (tabId === 'tab-swap') {
                 triggerLiveSwap();
@@ -1201,109 +1210,110 @@
         }
 
         // ==================== YIELD CURVES (PLOTLY) ====================
-        function renderYieldCurve(type, btn) {
-            if (typeof Plotly === 'undefined') {
-                console.warn("Plotly no está disponible");
-                return;
-            }
-            currentCurve = type;
+        let curvesData = null;
+
+        async function loadCurves() {
+            const res = await fetch('/api/v1/curves');
+            if (!res.ok) throw new Error('No se pudieron cargar las curvas');
+            curvesData = (await res.json()).groups;
+            const box = document.getElementById('curve-group-btns');
+            box.innerHTML = curvesData.map(g => `<button onclick="renderYieldCurve('${g.id}')" data-curve="${g.id}"
+                class="curve-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">${esc(g.title)}</button>`).join('');
+            if (!curvesData.some(g => g.id === currentCurve) && curvesData.length) currentCurve = curvesData[0].id;
+        }
+
+        async function renderYieldCurve(type, btn, reload = false) {
+            if (typeof Plotly === 'undefined') { console.warn('Plotly no está disponible'); return; }
+            try {
+                if (!curvesData || reload) await loadCurves();
+            } catch (err) { console.error(err); return; }
+            currentCurve = type && curvesData.some(g => g.id === type) ? type : currentCurve;
+            const g = curvesData.find(x => x.id === currentCurve);
+            if (!g) return;
             document.querySelectorAll('.curve-btn').forEach(b => {
-                b.classList.remove('bg-emerald-500', 'text-slate-950', 'font-bold');
-                b.classList.add('bg-brand-elevated', 'text-slate-300', 'font-semibold');
-            });
-            if (btn) {
-                btn.classList.remove('bg-brand-elevated', 'text-slate-300', 'font-semibold');
-                btn.classList.add('bg-emerald-500', 'text-slate-950', 'font-bold');
-            }
-
-            const points = allQuotes.filter(q => {
-                if (type === 'HARD_DOLLAR') return q.bond_type === 'HARD_DOLLAR' && q.modified_duration && q.ytm_percentage;
-                if (type === 'TASA_FIJA') return q.bond_type === 'TASA_FIJA' && q.modified_duration && q.ytm_percentage;
-                if (type === 'CER') return q.bond_type === 'CER' && q.modified_duration && q.ytm_percentage;
-                return false;
+                const on = b.dataset.curve === g.id;
+                b.className = `curve-btn px-3 py-1.5 rounded-lg text-xs transition ${on ? 'font-bold bg-emerald-500 text-slate-950' : 'font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700'}`;
             });
 
-            if (points.length === 0) {
-                Plotly.newPlot('plotly-curve-div', [], {
-                    title: { text: "No hay puntos suficientes para graficar en esta curva", font: { color: "#94a3b8" } },
-                    paper_bgcolor: "#0d1322", plot_bgcolor: "#0d1322"
-                });
-                return;
-            }
+            const byDays = g.x_label.startsWith('Días');
+            const isRegion = g.id === 'REGION';
+            const yName = g.id === 'TASA_FIJA' ? 'TEM' : (g.id === 'CER' ? 'TIR real' : 'TIR');
+            const showLabels = document.getElementById('curve-labels').checked;
+            const fmtX = v => byDays ? `${Math.round(v)} días` : `${v.toFixed(2)} años`;
 
-            let traces = [];
-            if (type === 'HARD_DOLLAR') {
-                const arg = points.filter(p => p.law === 'ARG');
-                const ny = points.filter(p => p.law === 'NY');
+            document.getElementById('curve-title').textContent = g.title;
+            document.getElementById('curve-desc').textContent = g.description;
+            document.getElementById('curve-notes').innerHTML = g.notes.map(n => `<div>${esc(n)}</div>`).join('');
 
+            const traces = [];
+            g.series.forEach(se => {
+                const labels = showLabels && (!isRegion || se.name.startsWith('Argentina'));
+                const hover = se.points.map(p => [
+                    `<b>${p.ticker}</b>${p.species !== p.ticker ? ' (' + p.species + ')' : ''}`,
+                    `${yName}: ${p.y.toFixed(2)}%`,
+                    p.tem !== null && g.id !== 'TASA_FIJA' && byDays ? `TEM: ${p.tem.toFixed(2)}%` : null,
+                    g.id === 'TASA_FIJA' && p.ytm !== null ? `TIREA: ${p.ytm.toFixed(2)}%` : null,
+                    p.md !== null ? `Duration: ${p.md.toFixed(2)} años` : null,
+                    p.days !== null ? `Vence: ${p.maturity} (${p.days} días)` : null,
+                    p.price ? `Precio: ${p.price.toLocaleString('es-AR')}` : null,
+                    p.parity ? `Paridad: ${p.parity.toFixed(1)}%` : null,
+                    p.residual_bps !== null ? `Desvío vs curva: ${p.residual_bps > 0 ? '+' : ''}${p.residual_bps.toFixed(0)} pb` : null,
+                    p.spread_ust_bps !== null ? `Spread vs UST: ${p.spread_ust_bps} pb` : null,
+                    `<span style="color:#64748b">Fuente: ${p.source}</span>`,
+                ].filter(Boolean).join('<br>'));
                 traces.push({
-                    x: arg.map(p => p.modified_duration),
-                    y: arg.map(p => p.ytm_percentage),
-                    text: arg.map(p => `<b>${p.ticker}</b><br>TIR: ${p.ytm_percentage.toFixed(2)}%<br>MD: ${p.modified_duration.toFixed(2)} años<br>Paridad: ${p.parity_percentage ? p.parity_percentage.toFixed(2) + '%' : '-'}`),
-                    hoverinfo: 'text',
-                    mode: 'markers+text',
-                    name: 'Ley ARG (Bonares AL)',
+                    x: se.points.map(p => p.x), y: se.points.map(p => p.y),
+                    text: se.points.map(p => p.ticker.replace(/_/g, ' ')),
+                    hovertext: hover, hoverinfo: 'text', name: se.name,
+                    mode: (se.line ? 'lines+markers' : 'markers') + (labels ? '+text' : ''),
                     textposition: 'top center',
-                    textfont: { family: 'JetBrains Mono', color: '#10b981', size: 11 },
-                    marker: { size: 12, color: '#10b981', symbol: 'circle', line: { color: '#ffffff', width: 1.5 } }
+                    textfont: { family: 'JetBrains Mono', color: se.color, size: 10 },
+                    line: { color: se.color, width: se.name.startsWith('Argentina') ? 3 : 1.5 },
+                    marker: { size: se.line ? 7 : 11, color: se.color, symbol: se.symbol, line: { color: '#0d1322', width: 1 } },
                 });
-
-                traces.push({
-                    x: ny.map(p => p.modified_duration),
-                    y: ny.map(p => p.ytm_percentage),
-                    text: ny.map(p => `<b>${p.ticker}</b><br>TIR: ${p.ytm_percentage.toFixed(2)}%<br>MD: ${p.modified_duration.toFixed(2)} años<br>Paridad: ${p.parity_percentage ? p.parity_percentage.toFixed(2) + '%' : '-'}`),
-                    hoverinfo: 'text',
-                    mode: 'markers+text',
-                    name: 'Ley NY (Globales GD)',
-                    textposition: 'top center',
-                    textfont: { family: 'JetBrains Mono', color: '#06b6d4', size: 11 },
-                    marker: { size: 12, color: '#06b6d4', symbol: 'diamond', line: { color: '#ffffff', width: 1.5 } }
-                });
-            } else {
-                traces.push({
-                    x: points.map(p => p.modified_duration),
-                    y: points.map(p => p.ytm_percentage),
-                    text: points.map(p => `<b>${p.ticker}</b><br>TIR: ${p.ytm_percentage.toFixed(2)}%<br>MD: ${p.modified_duration.toFixed(2)} años`),
-                    hoverinfo: 'text',
-                    mode: 'markers+text',
-                    name: type.replace('_', ' '),
-                    textposition: 'top center',
-                    textfont: { family: 'JetBrains Mono', color: '#10b981', size: 11 },
-                    marker: { size: 11, color: '#10b981' }
-                });
-            }
+                if (se.fit && se.fit.length) {
+                    traces.push({
+                        x: se.fit.map(f => f[0]), y: se.fit.map(f => f[1]), mode: 'lines',
+                        name: `${se.name} · curva ajustada`, hoverinfo: 'skip', showlegend: false,
+                        line: { color: se.color, width: 1.5, dash: 'dot' },
+                    });
+                }
+            });
 
             const layout = {
-                title: {
-                    text: `Curva de Rendimiento: ${type.replace(/_/g, ' ')} (Modified Duration vs TIR %)`,
-                    font: { color: '#f8fafc', size: 15, family: 'Plus Jakarta Sans' }
-                },
-                paper_bgcolor: '#0d1322',
-                plot_bgcolor: '#070a12',
+                paper_bgcolor: '#0d1322', plot_bgcolor: '#070a12',
                 font: { color: '#94a3b8', family: 'Plus Jakarta Sans' },
-                xaxis: {
-                    title: 'Modified Duration (Años)',
-                    gridcolor: '#1e293b',
-                    zerolinecolor: '#334155',
-                    tickfont: { family: 'JetBrains Mono' }
-                },
-                yaxis: {
-                    title: 'TIR / YTM (%)',
-                    gridcolor: '#1e293b',
-                    zerolinecolor: '#334155',
-                    tickfont: { family: 'JetBrains Mono' }
-                },
-                legend: {
-                    orientation: 'h',
-                    y: 1.12,
-                    x: 0,
-                    font: { color: '#cbd5e1' }
-                },
-                margin: { l: 60, r: 40, t: 60, b: 60 }
+                xaxis: { title: g.x_label, gridcolor: '#1e293b', zerolinecolor: '#334155', tickfont: { family: 'JetBrains Mono' },
+ },
+                yaxis: { title: g.y_label, gridcolor: '#1e293b', zerolinecolor: '#334155', tickfont: { family: 'JetBrains Mono' }, ticksuffix: '%', tickformat: g.id === 'TASA_FIJA' ? '.2f' : '.1f' },
+                legend: { orientation: 'h', y: 1.1, x: 0, font: { color: '#cbd5e1', size: 11 }, entrywidthmode: 'pixels', entrywidth: isRegion ? 120 : 170 },
+                hoverlabel: { bgcolor: '#0f172a', bordercolor: '#334155', font: { family: 'JetBrains Mono', size: 11 } },
+                margin: { l: 60, r: 20, t: 30, b: 55 },
             };
-
             Plotly.newPlot('plotly-curve-div', traces, layout, { responsive: true, displayModeBar: false });
-            Plotly.Plots.resize('plotly-curve-div');
+
+            // Tabla lateral
+            const rows = [];
+            g.series.forEach(se => se.points.forEach(p => rows.push({ ...p, serie: se.name, color: se.color })));
+            const metric = isRegion ? 'spread_ust_bps' : 'residual_bps';
+            document.getElementById('curve-table-title').textContent = isRegion ? 'Spread contra Treasuries' : 'Desvío contra la curva';
+            document.getElementById('curve-table-sub').textContent = isRegion
+                ? 'TIR menos la curva de Treasuries a la misma duration (riesgo país por tramo).'
+                : 'En puntos básicos. Positivo = rinde más que sus vecinos (relativamente barato).';
+            document.getElementById('curve-th-x').textContent = byDays ? 'Días' : 'MD';
+            document.getElementById('curve-th-y').textContent = yName;
+            document.getElementById('curve-th-r').textContent = isRegion ? 'vs UST' : 'Desvío';
+            const withMetric = rows.filter(r => r[metric] !== null).sort((a, b) => b[metric] - a[metric]);
+            const without = rows.filter(r => r[metric] === null).sort((a, b) => a.x - b.x);
+            const tone = v => v === null ? 'text-slate-500' : (isRegion ? 'text-slate-200' : (v >= 50 ? 'text-emerald-400' : (v <= -50 ? 'text-rose-400' : 'text-slate-300')));
+            document.getElementById('curve-table-body').innerHTML = [...withMetric, ...without].map(r => `
+                <tr><td class="py-1"><span style="color:${r.color}">●</span> <span class="text-white">${esc(r.ticker.replace(/_/g, ' '))}</span></td>
+                <td class="text-right text-slate-400">${byDays ? Math.round(r.x) : r.x.toFixed(2)}</td>
+                <td class="text-right">${r.y.toFixed(2)}%</td>
+                <td class="text-right font-bold ${tone(r[metric])}">${r[metric] === null ? '-' : (r[metric] > 0 && !isRegion ? '+' : '') + Math.round(r[metric])}</td></tr>`).join('');
+            document.getElementById('curve-excluded').innerHTML = g.excluded.length
+                ? `<b>Excluidos (${g.excluded.length}):</b> ` + g.excluded.map(e => `${esc(e.ticker)} (${esc(e.reason)})`).join(', ')
+                : '';
         }
 
         // ==================== SWAP SIMULATOR ====================

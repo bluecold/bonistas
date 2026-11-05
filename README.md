@@ -24,12 +24,26 @@ Cuando aparece una oportunidad que supera la ganancia neta mínima, avisa con un
 | **Profundidad** | Recorre el libro hasta cubrir el **tamaño de operación** configurado (USD 500 por defecto). Si la punta no alcanza, no hay señal. |
 | **Tiempo real** | Puntas de **BYMA Open Data**, con 20 min de demora, y, opcionalmente, de **Bull Market** en tiempo real con 5 niveles, usando la sesión del propio usuario. Cada señal indica de dónde salieron sus precios: *confirmada en tiempo real*, *parcial* o *demora 20 min*. |
 | **Alertas** | Notificación de Windows y panel en el dashboard para oportunidades nuevas, oportunidades confirmadas en tiempo real, sesión vencida y fuentes caídas, con un período de silencio contra las puntas que oscilan. |
-| **Analítica** | TIR, duration modificada, valor técnico, paridad, curvas de rendimiento, breakeven de inflación (tasa fija vs. CER) y simulador de swaps entre bonos. |
+| **Curvas** | Por familia: soberanos USD (Bonares vs Globales y BOPREAL), tasa fija (TEM vs. días), CER (TIR real), provinciales, dollar linked y TAMAR/duales. Cada una tiene su curva ajustada y el **desvío de cada bono en puntos básicos** (cuánto rinde de más o de menos que sus vecinos). Incluye **Argentina vs. región** con el spread contra Treasuries por tramo. |
+| **Analítica** | TIR, duration modificada, valor técnico, paridad, breakeven de inflación (tasa fija vs. CER) y simulador de swaps entre bonos. |
 | **Parámetros** | Costo por operación (0,11% todo incluido), ganancia neta mínima (0,40%) y tamaño de operación, **editables desde el dashboard**. |
 
 ---
 
 ## 🖼️ Capturas
+
+### Curvas de rendimiento por familia
+Un punto por bono, con la curva ajustada (punteada). En la tabla lateral, el desvío de cada bono contra su curva.
+
+![Curva soberana](docs/screenshots/curva-soberanos.jpg)
+
+| Desvío contra la curva | Tasa fija (TEM vs. días) |
+|---|---|
+| ![Desvíos](docs/screenshots/curva-desvios.jpg) | ![Tasa fija](docs/screenshots/curva-tasa-fija.jpg) |
+
+**Argentina vs región**: Globales argentinos contra soberanos de Latinoamérica y la curva de Treasuries (riesgo país por tramo).
+
+![Argentina vs región](docs/screenshots/curva-region.jpg)
 
 ### Contado Inmediato vs 24hs
 Escáner de todas las especies con puntas en ambos plazos: bruto, costos, caución, ajuste por cupón y neto.
@@ -154,7 +168,7 @@ backend/
 .\.venv\Scripts\pytest backend/tests -q
 ```
 
-189 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
+196 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
 
 ---
 
