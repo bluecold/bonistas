@@ -216,12 +216,21 @@ def _group_of(ref: ReferenceBond) -> Optional[str]:
     return None
 
 
-def _preferred_species(ref: ReferenceBond) -> List[str]:
+def _preferred_species(ref: ReferenceBond, dollar: str = "MEP") -> List[str]:
+    """
+    Orden de especies para tomar TIR / precio. Bonos en dólares: la especie D (MEP) o, con
+    dollar="CCL", la C (cable; si no figura en la lista se deriva de la D: CO32D -> CO32C).
+    """
     species = list(ref.species or [])
     usd = (ref.currency or "").upper() == "USD"
     d = [s for s in species if s.endswith("D") and s != ref.ticker_base]
-    rest = [s for s in species if s not in d]
-    ordered = (d + [ref.ticker_base] + rest) if usd else ([ref.ticker_base] + rest + d)
+    if usd and dollar == "CCL":
+        c = [s for s in species if s.endswith("C") and s != ref.ticker_base] + [s[:-1] + "C" for s in d]
+        rest = [s for s in species if s not in d and s not in c]
+        ordered = c + [ref.ticker_base] + rest
+    else:
+        rest = [s for s in species if s not in d]
+        ordered = (d + [ref.ticker_base] + rest) if usd else ([ref.ticker_base] + rest + d)
     seen, out = set(), []
     for s in ordered:
         if s not in seen:
@@ -232,11 +241,16 @@ def _preferred_species(ref: ReferenceBond) -> List[str]:
 
 def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] = None,
                  book_prices: Optional[Dict[str, Tuple[float, str]]] = None,
-                 mep_reference: Optional[float] = None) -> List[CurveGroup]:
+                 mep_reference: Optional[float] = None, dollar: str = "MEP",
+                 ccl_reference: Optional[float] = None) -> List[CurveGroup]:
     """
     `quotes`: ticker -> BondQuoteView (último snapshot de Bonistas, 24hs).
     `book_prices`: especie -> (precio por 100 VN, moneda ARS/MEP/CCL) de BYMA 24hs, para la TIR propia.
-    `mep_reference`: ARS por USD para convertir el precio cuando solo cotiza la especie en pesos.
+    `mep_reference` / `ccl_reference`: ARS por USD para convertir el precio cuando solo cotiza la
+    especie en pesos.
+    `dollar`: "MEP" (default, especies D) o "CCL" (especies C): TIR de los bonos en dólares medida
+    en dólar MEP o en dólar cable. Para bonos que pagan en cable (Globales, provinciales ley NY),
+    la TIR en cable es la de su moneda de pago; la diferencia con la de MEP es el canje.
     """
     from backend.app.services.market_calendar import next_business_day
     from backend.app.services.reference_data_service import ReferenceDataService
@@ -258,7 +272,7 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
         days = (maturity - today).days if maturity else None
 
         q, species = None, ref.ticker_base
-        for s in _preferred_species(ref):
+        for s in _preferred_species(ref, dollar):
             cand = quotes.get(s)
             if cand is not None and cand.ytm_percentage is not None:
                 q, species = cand, s
@@ -267,34 +281,48 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
             ytm, md, tem, source = q.ytm_percentage, q.modified_duration, q.tem_percentage, "BONISTAS"
             price = q.price_mep if species.endswith("D") and q.price_mep else (q.price_ars or q.price_mep or q.last_price)
             parity = q.parity_percentage
-        elif ref.ref_ytm_pct is not None:
-            # CompararBonos publica duration de Macaulay: se pasa a modificada (MD = Mac / (1 + TIR))
-            mac = ref.ref_duration
-            md = mac / (1 + ref.ref_ytm_pct / 100.0) if mac is not None and ref.ref_ytm_pct > -100 else None
-            ytm, tem, source = ref.ref_ytm_pct, None, "COMPARARBONOS"
-            price, parity = None, None
         else:
+            usd_flows = (ref.currency or "").upper() == "USD"
+            # La TIR de CompararBonos no informa en qué dólar está medida: en modo cable, para bonos
+            # en dólares se prioriza la TIR propia con precio cable y la de CompararBonos queda de respaldo.
+            comparar_first = ref.ref_ytm_pct is not None and not (dollar == "CCL" and usd_flows)
             ytm = md = tem = price = parity = None
             source = "PROPIO"
-            usd_flows = (ref.currency or "").upper() == "USD"
-            candidates = [(s, *book_prices[s]) for s in _preferred_species(ref) if book_prices.get(s)]
-            # Flujos en dólares: precio en dólares (MEP, luego cable); si solo hay pesos, se convierte
-            rank = {"MEP": 0, "CCL": 1, "ARS": 2} if usd_flows else {"ARS": 0, "MEP": 1, "CCL": 2}
-            candidates.sort(key=lambda c: rank.get(c[2], 9))
-            if candidates:
-                species, px, ccy = candidates[0]
-                if usd_flows and ccy == "ARS":
-                    price = px / mep_reference if mep_reference else None
-                    if price:
-                        species = f"{species} ÷ MEP"
-                elif not usd_flows and ccy != "ARS":
-                    price = None
+            if comparar_first:
+                mac = ref.ref_duration   # CompararBonos publica Macaulay: MD = Mac / (1 + TIR)
+                md = mac / (1 + ref.ref_ytm_pct / 100.0) if mac is not None and ref.ref_ytm_pct > -100 else None
+                ytm, source = ref.ref_ytm_pct, "COMPARARBONOS"
+            else:
+                candidates = [(s, *book_prices[s]) for s in _preferred_species(ref, dollar) if book_prices.get(s)]
+                # Flujos en dólares: precio en dólares (MEP, luego cable); si solo hay pesos, se convierte
+                if usd_flows:
+                    rank = {"CCL": 0, "MEP": 1, "ARS": 2} if dollar == "CCL" else {"MEP": 0, "CCL": 1, "ARS": 2}
                 else:
-                    price = px
-            if price and ref.flows and not ref.flows_cer_adjusted:
-                ytm, md = own_yield(ReferenceDataService.flows_of(ref), price, settlement)
-                if ref.flows_source == "BRUNO618":
-                    source = "PROPIO (flujos Bruno618)"
+                    rank = {"ARS": 0, "MEP": 1, "CCL": 2}
+                candidates.sort(key=lambda c: rank.get(c[2], 9))
+                if candidates:
+                    species, px, ccy = candidates[0]
+                    if usd_flows and ccy == "ARS":
+                        fx = ccl_reference if dollar == "CCL" else mep_reference
+                        price = px / fx if fx else None
+                        if price:
+                            species = f"{species} ÷ {'CCL' if dollar == 'CCL' else 'MEP'}"
+                    elif not usd_flows and ccy != "ARS":
+                        price = None
+                    else:
+                        price = px
+                if price and ref.flows and not ref.flows_cer_adjusted:
+                    ytm, md = own_yield(ReferenceDataService.flows_of(ref), price, settlement)
+                    if ref.flows_source and ref.flows_source != "COMPARARBONOS":
+                        names = {"BRUNO618": "Bruno618", "MERCADOSARG": "Mercados Argentina",
+                                 "COMPARARBONOS": "CompararBonos"}
+                        agree = (ref.flows_check or {}).get("fuentes_coinciden") or [ref.flows_source]
+                        src_txt = " + ".join(names.get(n, n) for n in agree)
+                        source = f"PROPIO (flujos {src_txt}{', verificados' if ref.flows_verified else ''})"
+                if ytm is None and ref.ref_ytm_pct is not None:
+                    mac = ref.ref_duration
+                    md = mac / (1 + ref.ref_ytm_pct / 100.0) if mac is not None and ref.ref_ytm_pct > -100 else None
+                    ytm, source = ref.ref_ytm_pct, "COMPARARBONOS"
         if tem is None and ytm is not None and ytm > -100:
             tem = ((1 + ytm / 100.0) ** (1 / 12.0) - 1) * 100.0
 
@@ -394,6 +422,11 @@ def build_curves(db: Session, quotes: Dict[str, object], today: Optional[date] =
                 base = interp([(u.x, u.y) for u in ust.points], p.x)
                 p.spread_ust_bps = round((p.y - base) * 100.0) if base is not None else None
 
+    if dollar == "CCL":
+        for gid in ("SOBERANOS_USD", "PROVINCIALES_USD", "REGION"):
+            groups[gid].notes.insert(0, "TIR en dólar cable (especies C). Bonos sin especie C: precio en pesos ÷ CCL.")
+        groups["SOBERANOS_USD"].description = groups["SOBERANOS_USD"].description.replace(
+            "TIR en dólares MEP (especie D).", "TIR en dólar cable (especie C).")
     for g in groups.values():
         if any(s.fit for s in g.series):
             g.notes.append("Desvío vs curva: positivo = rinde más que sus vecinos (relativamente barato); "

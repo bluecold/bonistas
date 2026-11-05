@@ -336,3 +336,12 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Curva provincial: 2 → 13 bonos. Provincia de Buenos Aires (BA37D/BB37D/BC37D) en serie aparte, fuera del ajuste (otro escalón de riesgo).
 * Sin precio en BYMA (excluidos con motivo): BP28, BPLD, BPLE, CO27D (en BYMA figura como CO2D7, en pesos), PUL26.
 
+### Provinciales: consenso de tres fuentes y TIR en MEP / cable (2026-11-05)
+
+* `data/mercados_argentina_client.py`: fichas `mercadosargentina.com.ar/activos/<ticker>` (robots.txt las permite; el sitio limita pedidos por IP: 1 s entre pedidos y corte ante HTTP 429). Lee la tabla "Cronograma de Pagos" (incluye pagos pasados: se conservan los futuros), valida total = renta + amortización, amortizaciones ≤ 100 y moneda de pago. Alias de tickers (SJO35 ↔ `sj035`) y especies BYMA de bonos nuevos (SJO35 → SJO5D/SJO5C).
+* Consenso (`merge_provincial_schedules`): se agrupan las fuentes que coinciden (mismos pagos, fechas a ≤ 3 días, montos a ≤ 0,05 por 100 VN). Si dos o más coinciden, los flujos quedan **verificados** (`reference_bonds.flows_verified`; detalle en `flows_check`). Si no, gana la mayoría; con empate, CompararBonos > Mercados Argentina > Bruno618.
+* Resultado real (05/11/2026): 12 verificados (BA37D, BB37D, BDC33, BDC36, CO32, CO35, ERF25, ERM33, NDT25, PMM29, PUA36, SFD34). Desacuerdos: BA37D (Bruno618 con fechas 21 días corridas, descartado por mayoría), BC37D (cupón 5,25% en Mercados Argentina vs 5% en Bruno618) y PUL26 (diferencias de hasta 0,09): sin verificar. SJO35 se agrega desde Mercados Argentina (sin verificar). NDG34 sigue sin cronograma en ninguna fuente.
+* El resguardo de cupón (sin señal CI vs 24hs a ±30 días de un pago) aplica solo a flujos de fuente secundaria **no verificados**. En CI vs 24hs, las especies con cupón "¿?" bajaron de 94 a 75.
+* Curvas `?dolar=MEP|CCL` y selector en el dashboard: con cable se usan especies C (derivadas de la D si hace falta) o precio en pesos ÷ CCL implícito del AL30. Para bonos en dólares, en modo cable se prioriza la TIR propia sobre la de CompararBonos (no informa en qué dólar está medida). Ejemplo: CO32 9,46% (MEP) vs 11,04% (cable; Mercados Argentina publica 10,78%).
+* Dashboard: se corrigió una carrera al cambiar de curva mientras se recargaban los datos.
+

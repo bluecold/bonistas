@@ -134,8 +134,8 @@ class MarketView:
     mep_reference: Optional[float] = None              # ARS por USD MEP, para dimensionar
     caucion_tna_pct: Optional[float] = None
     flows_by_base: Dict[str, Tuple[str, List[Tuple[date, float]]]] = field(default_factory=dict)
-    # Bonos cuyos flujos vienen de una fuente secundaria (Bruno618): fechas no verificadas contra
-    # una segunda fuente. Cerca de un pago no se emite señal (un error de fecha simularía un desarbitraje).
+    # Bonos cuyos flujos vienen de una sola fuente secundaria (Bruno618 o Mercados Argentina), sin
+    # una segunda fuente que confirme las fechas. Cerca de un pago no se emite señal (un error de fecha simularía un desarbitraje).
     unverified_bases: set = field(default_factory=set)
 
     # ------------------------------------------------------------------ libros
@@ -277,7 +277,8 @@ def build_market_view(
         for t in [base, *syms]:
             ref = refs_index.get(t)
             if ref is not None and ref.flows:
-                if ref.flows_source == "BRUNO618" and f is not None and not get_hard_dollar_schedule(hd_base(base)):
+                secondary_only = ref.flows_source not in (None, "COMPARARBONOS") and not ref.flows_verified
+                if secondary_only and f is not None and not get_hard_dollar_schedule(hd_base(base)):
                     view.unverified_bases.add(base)
                 break
         if f is not None:

@@ -771,7 +771,10 @@ def put_notification_settings(values: Dict[str, Any], db: Session = Depends(get_
 # ==========================================
 
 @router.get("/curves", tags=["Quant Analytics"])
-def get_curves(db: Session = Depends(get_db)):
+def get_curves(
+    dolar: str = Query("MEP", pattern="^(?i:MEP|CCL)$", description="TIR de bonos en dólares: MEP o CCL (cable)"),
+    db: Session = Depends(get_db),
+):
     """
     Curvas agrupadas por familia (soberanos USD, tasa fija, CER, provinciales, dollar linked,
     TAMAR/duales y Argentina vs región), con curva ajustada y desvío de cada bono en bps.
@@ -790,5 +793,12 @@ def get_curves(db: Session = Depends(get_db)):
         row = db.execute(select(MacroIndicator).where(MacroIndicator.name == "DOLAR_BOLSA")
                          .order_by(MacroIndicator.date.desc())).scalars().first()
         mep = float(row.value) if row else None
-    groups = build_curves(db, quotes, book_prices=prices, mep_reference=mep)
-    return {"mep_reference": round(mep, 2) if mep else None, "groups": [g.to_dict() for g in groups]}
+    ccl = prices["AL30"][0] / prices["AL30C"][0] if prices.get("AL30") and prices.get("AL30C") else None
+    if ccl is None:
+        row = db.execute(select(MacroIndicator).where(MacroIndicator.name == "DOLAR_CONTADOCONLIQUI")
+                         .order_by(MacroIndicator.date.desc())).scalars().first()
+        ccl = float(row.value) if row else None
+    dollar = dolar.upper()
+    groups = build_curves(db, quotes, book_prices=prices, mep_reference=mep, dollar=dollar, ccl_reference=ccl)
+    return {"dolar": dollar, "mep_reference": round(mep, 2) if mep else None,
+            "ccl_reference": round(ccl, 2) if ccl else None, "groups": [g.to_dict() for g in groups]}

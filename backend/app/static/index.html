@@ -223,7 +223,12 @@
             <div class="flex flex-wrap items-center gap-2 bg-brand-card p-3 rounded-xl border border-brand-border shadow-sm">
                 <span class="text-xs font-bold text-slate-400 uppercase tracking-wide mr-1">Curva:</span>
                 <div id="curve-group-btns" class="flex flex-wrap gap-2"></div>
-                <label class="ml-auto flex items-center gap-1.5 text-xs text-slate-400"><input type="checkbox" id="curve-labels" checked onchange="renderYieldCurve(currentCurve)"> Etiquetas</label>
+                <div id="curve-dollar" class="ml-auto flex items-center gap-1 text-xs" title="Para bonos en dólares: TIR medida con la especie D (MEP) o C (cable). La diferencia es el canje.">
+                    <span class="text-slate-400 mr-1">TIR en:</span>
+                    <button onclick="setCurveDollar('MEP')" data-dollar="MEP" class="curve-dollar-btn px-2.5 py-1 rounded-lg">MEP</button>
+                    <button onclick="setCurveDollar('CCL')" data-dollar="CCL" class="curve-dollar-btn px-2.5 py-1 rounded-lg">Cable</button>
+                </div>
+                <label class="flex items-center gap-1.5 text-xs text-slate-400 ml-3"><input type="checkbox" id="curve-labels" checked onchange="renderYieldCurve(currentCurve)"> Etiquetas</label>
             </div>
 
             <div class="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4">
@@ -1377,23 +1382,43 @@
 
         // ==================== YIELD CURVES (PLOTLY) ====================
         let curvesData = null;
+        let curveDollar = localStorage.getItem('curveDollar') || 'MEP';
+        const USD_CURVES = ['SOBERANOS_USD', 'PROVINCIALES_USD', 'REGION'];
+
+        function paintDollarButtons() {
+            document.querySelectorAll('.curve-dollar-btn').forEach(b => {
+                const on = b.dataset.dollar === curveDollar;
+                b.className = `curve-dollar-btn px-2.5 py-1 rounded-lg ${on ? 'font-bold bg-cyan-500 text-slate-950' : 'font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700'}`;
+            });
+            document.getElementById('curve-dollar').style.visibility = USD_CURVES.includes(currentCurve) ? 'visible' : 'hidden';
+        }
+
+        function setCurveDollar(d) {
+            curveDollar = d;
+            localStorage.setItem('curveDollar', d);
+            renderYieldCurve(currentCurve, null, true);
+        }
 
         async function loadCurves() {
-            const res = await fetch('/api/v1/curves');
+            const res = await fetch(`/api/v1/curves?dolar=${curveDollar}`);
             if (!res.ok) throw new Error('No se pudieron cargar las curvas');
             curvesData = (await res.json()).groups;
             const box = document.getElementById('curve-group-btns');
             box.innerHTML = curvesData.map(g => `<button onclick="renderYieldCurve('${g.id}')" data-curve="${g.id}"
                 class="curve-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">${esc(g.title)}</button>`).join('');
-            if (!curvesData.some(g => g.id === currentCurve) && curvesData.length) currentCurve = curvesData[0].id;
         }
+
+        let curveRequest = 0;
 
         async function renderYieldCurve(type, btn, reload = false) {
             if (typeof Plotly === 'undefined') { console.warn('Plotly no está disponible'); return; }
+            if (type) currentCurve = type;
+            const req = ++curveRequest;
             try {
                 if (!curvesData || reload) await loadCurves();
             } catch (err) { console.error(err); return; }
-            currentCurve = type && curvesData.some(g => g.id === type) ? type : currentCurve;
+            if (req !== curveRequest) return;      // llegó otro pedido mientras se cargaban los datos
+            if (!curvesData.some(g => g.id === currentCurve) && curvesData.length) currentCurve = curvesData[0].id;
             const g = curvesData.find(x => x.id === currentCurve);
             if (!g) return;
             document.querySelectorAll('.curve-btn').forEach(b => {
@@ -1407,7 +1432,8 @@
             const showLabels = document.getElementById('curve-labels').checked;
             const fmtX = v => byDays ? `${Math.round(v)} días` : `${v.toFixed(2)} años`;
 
-            document.getElementById('curve-title').textContent = g.title;
+            paintDollarButtons();
+            document.getElementById('curve-title').textContent = g.title + (USD_CURVES.includes(g.id) ? ` · TIR en ${curveDollar === 'CCL' ? 'dólar cable' : 'dólar MEP'}` : '');
             document.getElementById('curve-desc').textContent = g.description;
             document.getElementById('curve-notes').innerHTML = g.notes.map(n => `<div>${esc(n)}</div>`).join('');
 

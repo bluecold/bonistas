@@ -186,6 +186,9 @@ class ReferenceBond(Base):
     # [["2027-01-02", renta, amortización, total, residual], ...]
     flows_source = Column(String(30), nullable=True)
     flows_detail = Column(JSON, nullable=True)
+    # Verificado = al menos dos fuentes independientes coinciden en fechas y montos
+    flows_verified = Column(Boolean, nullable=True)
+    flows_check = Column(JSON, nullable=True)
 
     def __repr__(self):
         return f"<ReferenceBond {self.ticker_base} ({self.tipo}) {len(self.flows or [])} flujos>"

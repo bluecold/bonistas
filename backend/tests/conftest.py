@@ -145,6 +145,16 @@ def _install_offline_sources(monkeypatch):
 
     monkeypatch.setattr(Bruno618Client, "fetch_schedules", fake_bruno_schedules)
 
+    # --- Mercados Argentina: ficha real recortada de SJ035 (San Juan 2035)
+    from backend.app.data.mercados_argentina_client import MercadosArgentinaClient
+    from backend.app.data.mercados_argentina_client import parse_schedule as ma_parse
+    sj_html = (FIXTURES / "mercadosargentina_sj035.html").read_text(encoding="utf-8")
+
+    async def fake_ma_schedules(self, after, tickers=None):
+        return {"SJO35": ma_parse("SJO35", sj_html, after)}, {}
+
+    monkeypatch.setattr(MercadosArgentinaClient, "fetch_schedules", fake_ma_schedules)
+
     # Red de seguridad: aunque algún test construya un WindowsToastNotifier, no lanza PowerShell
     from backend.app.services.notifier import WindowsToastNotifier
     monkeypatch.setattr(WindowsToastNotifier, "send", lambda self, title, message, url=None: False)

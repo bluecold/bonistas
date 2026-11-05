@@ -83,33 +83,21 @@ def sched(t, rows, ccy="USD"):
     return ProvincialSchedule(t, ccy, "05/11/2026", [ScheduleRow(*r) for r in rows])
 
 
-def test_merge_fills_adds_keeps_and_checks(db):
-    db.add_all([
-        ReferenceBond(ticker_base="CO32", tipo="Provincial", currency="USD", species=["CO32D"], flows=[]),
-        ReferenceBond(ticker_base="BB37D", tipo="Provincial", currency="USD", species=["BB37D"],
-                      flows=[["2027-03-01", 5.0], ["2027-09-01", 105.0]], flows_source="COMPARARBONOS"),
-        ReferenceBond(ticker_base="BA37D", tipo="Provincial", currency="USD", species=["BA7DD"],
-                      flows=[["2027-03-01", 5.0], ["2027-09-01", 105.0]], flows_source="COMPARARBONOS"),
-    ])
+def test_merge_single_secondary_source_is_unverified(db):
+    db.add(ReferenceBond(ticker_base="CO32", tipo="Provincial", currency="USD", species=["CO32D"], flows=[]))
     db.commit()
     res = ReferenceDataService.merge_provincial_schedules(db, {
-        "CO32": parse_schedule("CO32", HTML),
-        "ERM33": sched("ERM33", [(date(2027, 3, 4), 2.0, 100.0, 102.0, 0.0)]),
-        "BB37D": sched("BB37D", [(date(2027, 3, 1), 0.0, 5.0, 5.0, 95.0), (date(2027, 9, 1), 10.0, 95.0, 105.0, 0.0)]),
-        "BA37D": sched("BA37D", [(date(2027, 3, 22), 0.0, 5.0, 5.0, 95.0), (date(2027, 9, 22), 10.0, 95.0, 105.0, 0.0)]),
-        "PESOS": sched("PESOS", [(date(2027, 1, 1), 1.0, 100.0, 101.0, 0.0)], ccy="ARS"),
-    })
-    assert res["filled"] == ["CO32"] and res["added"] == ["ERM33"] and res["skipped_ars"] == ["PESOS"]
-    assert sorted(res["kept_comparar"]) == ["BA37D", "BB37D"]
-    assert res["cross_check"]["BB37D"]["coincide"] is True
-    assert res["cross_check"]["BA37D"]["coincide"] is False and res["cross_check"]["BA37D"]["max_dias_diferencia"] == 21
-
+        "BRUNO618": {"CO32": parse_schedule("CO32", HTML),
+                     "ERM33": sched("ERM33", [(date(2027, 3, 4), 2.0, 100.0, 102.0, 0.0)]),
+                     "PESOS": sched("PESOS", [(date(2027, 1, 1), 1.0, 100.0, 101.0, 0.0)], ccy="ARS")},
+    }, today=date(2026, 11, 5))
+    assert sorted(res["unverified"]) == ["CO32", "ERM33"] and res["added"] == ["ERM33"]
+    assert res["skipped_ars"] == ["PESOS@BRUNO618"]
     co32 = db.get(ReferenceBond, "CO32")
-    assert co32.flows_source == "BRUNO618" and co32.flows[0] == ["2027-01-02", 4.88]
-    assert co32.flows_detail[0] == ["2027-01-02", 4.88, 0.0, 4.88, 100.0]
+    assert co32.flows_source == "BRUNO618" and co32.flows_verified is False
+    assert co32.flows[0] == ["2027-01-02", 4.88] and co32.flows_detail[0] == ["2027-01-02", 4.88, 0.0, 4.88, 100.0]
     erm = db.get(ReferenceBond, "ERM33")
     assert erm.tipo == "Provincial" and erm.species == ["ERM33", "ERM33D"]
-    assert db.get(ReferenceBond, "BB37D").flows_source == "COMPARARBONOS"     # CompararBonos manda
 
 
 # ---------------------------------------------------------------------------

@@ -166,3 +166,28 @@ def test_flows_without_price_reason(db):
              if g.id == "PROVINCIALES_USD")
     assert [p.ticker for s in g.series for p in s.points] == ["PROVD"]
     assert g.excluded == [{"ticker": "PROVC", "reason": "sin precio en BYMA para calcular la TIR"}]
+
+
+def test_cable_dollar_uses_c_species_and_ccl_conversion(db):
+    db.add_all([
+        ref("AL30", "Soberano", species=["AL30D", "AL30C", "AL30"]),
+        ref("PROVB", "Provincial", species=["PROVB"], flows=[["2027-11-05", 10.0], ["2028-11-05", 110.0]]),
+    ])
+    db.commit()
+    quotes = {"AL30D": q("AL30D", 13.2, 1.65), "AL30C": q("AL30C", 16.0, 1.62)}
+    prices = {"PROVB": (169400.0, "ARS")}
+    groups = {g.id: g for g in build_curves(db, quotes, today=TODAY, book_prices=prices, mep_reference=1585.0,
+                                             dollar="CCL", ccl_reference=1694.0)}
+    al30 = groups["SOBERANOS_USD"].series[0].points[0]
+    assert al30.species == "AL30C" and al30.y == 16.0
+    prov = groups["PROVINCIALES_USD"].series[0].points[0]
+    assert prov.species == "PROVB ÷ CCL" and prov.ytm == pytest.approx(10.0, abs=0.1)     # 169400/1694 = 100
+    assert "cable" in groups["SOBERANOS_USD"].description
+
+    mep = {g.id: g for g in build_curves(db, quotes, today=TODAY, book_prices=prices, mep_reference=1585.0)}
+    assert mep["SOBERANOS_USD"].series[0].points[0].species == "AL30D"
+
+
+def test_api_curves_dollar_param(client):
+    assert client.get("/api/v1/curves", params={"dolar": "CCL"}).json()["dolar"] == "CCL"
+    assert client.get("/api/v1/curves", params={"dolar": "X"}).status_code == 422
