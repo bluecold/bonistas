@@ -128,11 +128,13 @@ def _install_offline_sources(monkeypatch):
 
     # --- Bull Market (etapa 4): respuesta real recortada de 24hs; CI se simula con las mismas puntas
     bm_rows = _load("bullmarket_bonos_24hs.json")["result"]
+    bm_on_rows = _load("bullmarket_on_24hs.json")["result"]     # índice obligacionesNegociables
 
     async def fake_bm_raw(self, cookie, term, index="bonos"):
         if cookie != TEST_BM_COOKIE:
             raise SessionExpiredError("Sesión de Bull Market vencida o inválida (HTTP 302).")
-        return [dict(r, term=str(term)) for r in bm_rows]
+        rows = bm_on_rows if index == "obligacionesNegociables" else bm_rows
+        return [dict(r, term=str(term)) for r in rows]
 
     monkeypatch.setattr(BullMarketClient, "fetch_raw", fake_bm_raw)
 

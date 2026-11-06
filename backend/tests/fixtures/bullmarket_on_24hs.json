@@ -1,0 +1,477 @@
+{
+ "result": [
+  {
+   "ticker": "MGCOD",
+   "parentTicker": "MGCOO",
+   "name": "Pampa Energia. Clase XXIII. Tasa fija 7.875%. USD. Vto. 12-2034.",
+   "indexes": [
+    {
+     "name": "obligacionesNegociables",
+     "ticker": "MGCOD",
+     "quantity": 0.0
+    }
+   ],
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 105.3,
+      "quantity": 10000,
+      "position": 1
+     },
+     {
+      "price": 104.0,
+      "quantity": 10000,
+      "position": 2
+     }
+    ],
+    "askTop": [
+     {
+      "price": 106.45,
+      "quantity": 10000,
+      "position": 1
+     },
+     {
+      "price": 106.5,
+      "quantity": 10000,
+      "position": 2
+     },
+     {
+      "price": 107.7,
+      "quantity": 10000,
+      "position": 3
+     },
+     {
+      "price": 107.9,
+      "quantity": 10000,
+      "position": 4
+     },
+     {
+      "price": 108.0,
+      "quantity": 10000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 105.95,
+    "min": 105.4,
+    "max": 105.95,
+    "price": 105.6,
+    "totalNominalValue": 30000,
+    "totalAmount": 31695,
+    "operations": 3,
+    "close": 105.55,
+    "lastPrice": 0.0,
+    "variation": 0.04,
+    "trend": 0.0,
+    "setlementPrice": 0.0,
+    "adjacentPrice": 0.0,
+    "openInterest": 0.0,
+    "turnover": 0.0,
+    "trades": 0.0,
+    "doubleTotalAmount": 0.0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261106,
+   "emisionTime": "165652",
+   "change": false,
+   "executionMonthOrder": 0,
+   "strikePrice": 0.0,
+   "term": "2",
+   "hasInformation": {
+    "hasInformation": true
+   },
+   "isOption": true,
+   "mayorista": 0.0
+  },
+  {
+   "ticker": "MGCOO",
+   "name": "ON PAMPA ENERGIA S.A. Cl. XXIII V.16/12/34",
+   "indexes": [
+    {
+     "name": "obligacionesNegociables",
+     "ticker": "MGCOO",
+     "quantity": 0.0
+    }
+   ],
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 165010.0,
+      "quantity": 10000,
+      "position": 1
+     }
+    ],
+    "askTop": [
+     {
+      "price": 169550.0,
+      "quantity": 10000,
+      "position": 1
+     },
+     {
+      "price": 171360.0,
+      "quantity": 10000,
+      "position": 2
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 0.0,
+    "min": 0.0,
+    "max": 0.0,
+    "price": 0.0,
+    "totalNominalValue": 0,
+    "totalAmount": 0,
+    "operations": 0,
+    "close": 168860.0,
+    "lastPrice": 0.0,
+    "variation": 0.0,
+    "trend": 0.0,
+    "setlementPrice": 0.0,
+    "adjacentPrice": 0.0,
+    "openInterest": 0.0,
+    "turnover": 0.0,
+    "trades": 0.0,
+    "doubleTotalAmount": 0.0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261106,
+   "emisionTime": "164431",
+   "change": false,
+   "executionMonthOrder": 0,
+   "strikePrice": 0.0,
+   "term": "2",
+   "hasInformation": {
+    "hasInformation": true
+   },
+   "isOption": true,
+   "mayorista": 0.0
+  },
+  {
+   "ticker": "YM34C",
+   "parentTicker": "YM34O",
+   "name": "YPF S.A. Clase XXXIV. Tasa Fija 8.25%. USD. Vto. 01-2034",
+   "indexes": [
+    {
+     "name": "obligacionesNegociables",
+     "ticker": "YM34C",
+     "quantity": 0.0
+    }
+   ],
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 101.0,
+      "quantity": 27,
+      "position": 1
+     },
+     {
+      "price": 100.25,
+      "quantity": 50,
+      "position": 2
+     }
+    ],
+    "askTop": [
+     {
+      "price": 104.0,
+      "quantity": 1837,
+      "position": 1
+     },
+     {
+      "price": 104.55,
+      "quantity": 1891,
+      "position": 2
+     },
+     {
+      "price": 104.75,
+      "quantity": 2000,
+      "position": 3
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 101.0,
+    "min": 100.15,
+    "max": 104.7,
+    "price": 104.65,
+    "totalNominalValue": 35454,
+    "totalAmount": 35839,
+    "operations": 49,
+    "close": 101.8,
+    "lastPrice": 0.0,
+    "variation": 2.79,
+    "trend": 0.0,
+    "setlementPrice": 0.0,
+    "adjacentPrice": 0.0,
+    "openInterest": 0.0,
+    "turnover": 0.0,
+    "trades": 0.0,
+    "doubleTotalAmount": 0.0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "currency": "CCL",
+   "emisionDate": 20261106,
+   "emisionTime": "165556",
+   "change": false,
+   "executionMonthOrder": 0,
+   "strikePrice": 0.0,
+   "term": "2",
+   "hasInformation": {
+    "hasInformation": true
+   },
+   "isOption": true,
+   "mayorista": 0.0
+  },
+  {
+   "ticker": "YM34D",
+   "parentTicker": "YM34O",
+   "name": "ON YPF - USD 8.25% - Vto 17/01/2034",
+   "indexes": [
+    {
+     "name": "obligacionesNegociables",
+     "ticker": "YM34D",
+     "quantity": 0.0
+    }
+   ],
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 107.25,
+      "quantity": 43000,
+      "position": 1
+     },
+     {
+      "price": 107.2,
+      "quantity": 374,
+      "position": 2
+     },
+     {
+      "price": 107.1,
+      "quantity": 3391,
+      "position": 3
+     },
+     {
+      "price": 107.05,
+      "quantity": 2612,
+      "position": 4
+     },
+     {
+      "price": 107.0,
+      "quantity": 570,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 107.25,
+      "quantity": 2762,
+      "position": 1
+     },
+     {
+      "price": 107.4,
+      "quantity": 548,
+      "position": 2
+     },
+     {
+      "price": 107.6,
+      "quantity": 1000,
+      "position": 3
+     },
+     {
+      "price": 107.95,
+      "quantity": 4000,
+      "position": 4
+     },
+     {
+      "price": 108.0,
+      "quantity": 10000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 105.7,
+    "min": 105.7,
+    "max": 108.8,
+    "price": 107.25,
+    "totalNominalValue": 182142,
+    "totalAmount": 194994,
+    "operations": 372,
+    "close": 107.4,
+    "lastPrice": 0.0,
+    "variation": -0.13,
+    "trend": 0.0,
+    "setlementPrice": 0.0,
+    "adjacentPrice": 0.0,
+    "openInterest": 0.0,
+    "turnover": 0.0,
+    "trades": 0.0,
+    "doubleTotalAmount": 0.0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "currency": "USD",
+   "emisionDate": 20261106,
+   "emisionTime": "165850",
+   "change": false,
+   "executionMonthOrder": 0,
+   "strikePrice": 0.0,
+   "term": "2",
+   "hasInformation": {
+    "hasInformation": true
+   },
+   "isOption": true,
+   "mayorista": 0.0
+  },
+  {
+   "ticker": "YM34O",
+   "name": "ON YPF - USD 8.25% - Vto 17/01/2034",
+   "indexes": [
+    {
+     "name": "obligacionesNegociables",
+     "ticker": "YM34O",
+     "quantity": 0.0
+    }
+   ],
+   "stockOffer": {
+    "bidTop": [
+     {
+      "price": 169190.0,
+      "quantity": 502,
+      "position": 1
+     },
+     {
+      "price": 169000.0,
+      "quantity": 295,
+      "position": 2
+     },
+     {
+      "price": 167600.0,
+      "quantity": 9000,
+      "position": 3
+     },
+     {
+      "price": 167510.0,
+      "quantity": 29,
+      "position": 4
+     },
+     {
+      "price": 167000.0,
+      "quantity": 6,
+      "position": 5
+     }
+    ],
+    "askTop": [
+     {
+      "price": 169430.0,
+      "quantity": 574,
+      "position": 1
+     },
+     {
+      "price": 169450.0,
+      "quantity": 1000,
+      "position": 2
+     },
+     {
+      "price": 169460.0,
+      "quantity": 1414,
+      "position": 3
+     },
+     {
+      "price": 169500.0,
+      "quantity": 1000,
+      "position": 4
+     },
+     {
+      "price": 170860.0,
+      "quantity": 4000,
+      "position": 5
+     }
+    ],
+    "bid": [],
+    "ask": [],
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "stockState": {
+    "open": 171640.0,
+    "min": 166180.0,
+    "max": 172450.0,
+    "price": 169430.0,
+    "totalNominalValue": 128458,
+    "totalAmount": 216897450,
+    "operations": 523,
+    "close": 169110.0,
+    "lastPrice": 0.0,
+    "variation": 0.18,
+    "trend": 0.0,
+    "setlementPrice": 0.0,
+    "adjacentPrice": 0.0,
+    "openInterest": 0.0,
+    "turnover": 0.0,
+    "trades": 0.0,
+    "doubleTotalAmount": 0.0,
+    "longOperations": 0,
+    "emisionTime": 0,
+    "emisionDate": 0,
+    "strikePrice": 0.0,
+    "executionMonthOrder": 0
+   },
+   "currency": "ARS",
+   "emisionDate": 20261106,
+   "emisionTime": "165625",
+   "change": false,
+   "executionMonthOrder": 0,
+   "strikePrice": 0.0,
+   "term": "2",
+   "hasInformation": {
+    "hasInformation": true
+   },
+   "isOption": true,
+   "mayorista": 0.0
+  }
+ ]
+}

@@ -28,6 +28,62 @@ def _positive(value: Any) -> Optional[float]:
         return None
     return v if v > 0 else None
 
+
+# Tipos que no son bonos soberanos/subsoberanos en dólares
+ON = "ON"                 # obligaciones negociables (deuda corporativa)
+NOT_A_BOND = "NO_BONO"    # acciones / CEDEARs que bonistas.com mezcla en el listado
+SCENARIO = "ESCENARIO"    # variantes de cálculo de un bono (TTD26_CAP, TXMD8_CER, ..._PUT, ..._TAM)
+HIDDEN_TYPES = (NOT_A_BOND, SCENARIO)
+_CATALOG_TICKERS = {b["ticker"] for b in INITIAL_BONDS}
+
+
+def classify_family(family: str) -> Optional[str]:
+    """
+    Tipo de instrumento a partir de la familia de bonistas.com. None = no es un bono (acciones y
+    CEDEARs vienen con familia vacía). Antes todo lo no reconocido caía en HARD_DOLLAR.
+    """
+    f = (family or "").strip().upper()
+    if not f:
+        return None
+    if f.startswith("ONS"):
+        return ON
+    # Los duales (DUAL-CER-TAMAR...) contienen "CER" en la familia: van antes que CER
+    if "DUAL" in f:
+        return "DUAL"
+    if "CER" in f:
+        return "CER"
+    if "FIJA" in f or "FIJO" in f:
+        return "TASA_FIJA"
+    if "BOPREAL" in f:
+        return "BOPREAL"
+    if "DOLAR-LINKED" in f:
+        return "DOLLAR_LINKED"
+    if "TAMAR" in f or "BADLAR" in f:
+        return "TAMAR"
+    if f.startswith("BONO-USD"):
+        return "HARD_DOLLAR"
+    return "OTRO"
+
+
+def species_currency(family: str, ticker: str) -> str:
+    """
+    Moneda de la especie ("ARS", "MEP" o "CCL"). Familias de bonistas: BONO-USD-L{P,D,C}{A,NY}
+    (pesos / MEP / cable), *-CABLE, *-PESOS; en ON y letras en dólares lo dice el sufijo D/C.
+    """
+    f = (family or "").strip().upper()
+    t = (ticker or "").strip().upper()
+    if "CABLE" in f or f.endswith(("-LCA", "-LCNY")):
+        return "CCL"
+    if f.endswith(("-LDA", "-LDNY")):
+        return "MEP"
+    if f.endswith(("-LPA", "-LPNY")) or "PESOS" in f:
+        return "ARS"
+    usd_family = f.startswith("ONS") or f.endswith("-USD") or f == "BOPREAL"
+    if usd_family and len(t) >= 4 and t[-1] in ("D", "C"):
+        return "MEP" if t[-1] == "D" else "CCL"
+    return "ARS"
+
+
 class IngestionService:
     def __init__(
         self,
@@ -41,6 +97,8 @@ class IngestionService:
         # Último snapshot guardado por (ticker, plazo) para no repetir filas idénticas.
         # Arranca vacía: tras un reinicio, el primer ciclo guarda una vez cada bono.
         self._last_snapshot: Dict[tuple, tuple] = {}
+        # Emisor de cada ON (bonistas.com) para agrupar por empresa en el valor relativo
+        self.issuer_by_ticker: Dict[str, str] = {}
 
     def seed_initial_bonds(self, db: Session) -> int:
         """Siembra el catálogo inicial de bonos si no están cargados."""
@@ -48,6 +106,12 @@ class IngestionService:
         for item in INITIAL_BONDS:
             ticker = item["ticker"]
             existing = db.execute(select(Bond).where(Bond.ticker == ticker)).scalar_one_or_none()
+            if existing and (existing.maturity_date != item["maturity_date"] or existing.name != item["name"]):
+                # Correcciones del catálogo (ej. vencimientos de TY30P, TXMD8, TZX27, BPA8D, TXMJ0)
+                existing.maturity_date = item["maturity_date"]
+                existing.name = item["name"]
+                existing.short_description = item.get("short_description")
+                count_created += 1
             if not existing:
                 bond = Bond(
                     ticker=ticker,
@@ -69,7 +133,7 @@ class IngestionService:
         
         if count_created > 0:
             db.commit()
-            logger.info(f"Se crearon {count_created} bonos iniciales en la base de datos.")
+            logger.info(f"Catálogo inicial: {count_created} bonos creados o actualizados.")
         return count_created
 
     async def ingest_market_data(self, db: Session) -> Dict[str, Any]:
@@ -121,6 +185,7 @@ class IngestionService:
         now = datetime.now(timezone.utc)
         snapshots_created = 0
         skipped_without_price = 0
+        non_bonds = 0
         unchanged = 0
         scenario_variants = 0
         bonds_by_ticker: Dict[str, Bond] = {b.ticker: b for b in db.execute(select(Bond)).scalars()}
@@ -136,34 +201,39 @@ class IngestionService:
             base_ticker = raw_ticker
             if base_ticker.endswith("_24hs") or base_ticker.endswith("_CI"):
                 base_ticker = base_ticker.split("_")[0]
-            # _PUT / _TAM son el MISMO instrumento con la TIR calculada bajo otro escenario
-            # (ejercicio del put, tasa TAMAR). Fusionarlos con el bono base hacía alternar la
-            # TIR entre escenarios en cada ciclo: se usa solo el escenario base.
-            if base_ticker.endswith("_PUT") or base_ticker.endswith("_TAM"):
+            # _PUT / _TAM / _CER / _CAP son el MISMO instrumento con la TIR calculada bajo otro
+            # escenario (ejercicio del put, pata TAMAR o CER de un dual, capitalización). Se usa
+            # solo el escenario base; si una versión anterior los registró, quedan ocultos.
+            if "_" in base_ticker:
                 scenario_variants += 1
+                old = bonds_by_ticker.get(base_ticker)
+                if old and old.bond_type != SCENARIO and old.ticker not in _CATALOG_TICKERS:
+                    old.bond_type = SCENARIO
                 continue
+
+            family = b_raw.get("bond_family", "") or ""
+            inferred_type = classify_family(family)
+            if inferred_type == ON and b_raw.get("emisor"):
+                self.issuer_by_ticker[base_ticker] = str(b_raw["emisor"]).strip()
 
             # Buscar si existe el bono en el maestro
             bond = bonds_by_ticker.get(base_ticker)
+            if inferred_type is None:
+                # Acciones / CEDEARs: no son bonos. Si ya se habían registrado, se marcan y no se
+                # guardan más cotizaciones.
+                non_bonds += 1
+                if bond and bond.bond_type != NOT_A_BOND and bond.ticker not in _CATALOG_TICKERS:
+                    bond.bond_type = NOT_A_BOND
+                continue
+            if bond and bond.ticker not in _CATALOG_TICKERS and bond.bond_type != inferred_type:
+                # Los bonos fuera del catálogo siguen la familia de bonistas (corrige ON y acciones
+                # que caían en HARD_DOLLAR, y duales que caían en CER)
+                bond.bond_type = inferred_type
             if not bond:
                 # Si no está en el catálogo, inferir y registrar dinámicamente
-                family = b_raw.get("bond_family", "") or ""
                 law_code = b_raw.get("bond_law", "LA")
                 law = "NY" if "LNY" in law_code or "NY" in law_code else "ARG"
-                
-                bond_type = "HARD_DOLLAR"
-                if "CER" in family:
-                    bond_type = "CER"
-                elif "FIJA" in family or "CUPON-FIJO" in family:
-                    bond_type = "TASA_FIJA"
-                elif "DUAL" in family:
-                    bond_type = "DUAL"
-                elif "BOPREAL" in family:
-                    bond_type = "BOPREAL"
-                elif "DOLAR-LINKED" in family:
-                    bond_type = "DOLLAR_LINKED"
-                elif "TAMAR" in family or "BADLAR" in family:
-                    bond_type = "TAMAR"
+                bond_type = inferred_type
 
                 curr = "USD" if "USD" in family or law == "NY" else "ARS"
                 end_date_str = b_raw.get("end_date")
@@ -199,16 +269,20 @@ class IngestionService:
                 price_mep = _positive(fx_info.get("price_usd"))
                 price_ccl = _positive(fx_info.get("price_cable"))
             else:
-                # Si el ticker termina en D (especie MEP)
-                if raw_ticker.endswith("D") and len(raw_ticker) in (5, 6):
+                # Sin fila de FX (bonos nuevos como AN29/AO27, ON, letras): el último precio es el
+                # de la propia especie, en la moneda que indica la familia.
+                ccy = species_currency(family, base_ticker)
+                if ccy == "MEP":
                     price_mep = last_price
-                elif raw_ticker.endswith("C") and len(raw_ticker) in (5, 6):
+                elif ccy == "CCL":
                     price_ccl = last_price
-                elif bond.currency == "ARS":
+                else:
                     price_ars = last_price
 
-            # Sin ningún precio válido no hay cotización: no se guarda un snapshot "en cero"
-            if not any((last_price, price_ars, price_mep, price_ccl)):
+            # Sin ningún precio válido no hay cotización: no se guarda un snapshot "en cero".
+            # bonistas publica 0.01 con TIR 0 como relleno en especies sin operaciones (ej. TB27).
+            placeholder = not b_raw.get("tir") and (last_price or 0) <= 0.01 and not fx_info
+            if placeholder or not any((last_price, price_ars, price_mep, price_ccl)):
                 skipped_without_price += 1
                 continue
 
@@ -275,6 +349,7 @@ class IngestionService:
             "skipped_without_price": skipped_without_price,
             "unchanged": unchanged,
             "scenario_variants_skipped": scenario_variants,
+            "non_bonds_skipped": non_bonds,
             "dolares": dolar_quotes,
             "warnings": warnings,
         }
@@ -307,6 +382,8 @@ class IngestionService:
 
         if bond_type:
             query = query.where(Bond.bond_type == bond_type.upper())
+        else:
+            query = query.where(Bond.bond_type.not_in(HIDDEN_TYPES))
 
         results = db.execute(query).all()
         quotes = []
@@ -317,6 +394,7 @@ class IngestionService:
                     name=bond.name,
                     bond_type=bond.bond_type,
                     law=bond.law,
+                    maturity_date=bond.maturity_date,
                     settlement_type=snap.settlement_type,
                     price_ars=float(snap.price_ars) if snap.price_ars is not None else None,
                     price_mep=float(snap.price_mep) if snap.price_mep is not None else None,

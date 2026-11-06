@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 class PriceSnapshotBase(BaseModel):
@@ -32,6 +32,7 @@ class BondQuoteView(BaseModel):
     name: str
     bond_type: str
     law: str
+    maturity_date: Optional[date] = None
     settlement_type: str
     price_ars: Optional[float] = None
     price_mep: Optional[float] = None

@@ -13,6 +13,10 @@ incluiría el cupón y el del otro no).
 
 Ida y vuelta (señal): comprar dólares con el bono más barato y venderlos con el más caro,
 las 4 patas en el mismo plazo:  ganancia = tc_venta(Y) / tc_compra(X) - 1  (costos incluidos).
+
+Obligaciones negociables: se calculan igual (especie O en pesos, D y C en dólares) con las puntas de
+Bull Market. Las idas y vueltas con alguna pata en una ON se informan aparte (instrument = "ON"),
+así las de bonos no cambian y se pueden filtrar.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -39,6 +43,8 @@ class FxQuote:
     nominal: Optional[float]
     notes: List[str] = field(default_factory=list)
     source: str = "BYMA"
+    instrument: str = "BONO"         # BONO | ON
+    vs_reference_pct: Optional[float] = None   # TC de compra vs el de AL30 (negativo = más barato)
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -56,6 +62,7 @@ class FxRoundTrip:
     signal: bool
     notes: List[str] = field(default_factory=list)
     source: str = "BYMA"
+    instrument: str = "BONO"         # ON si alguna de las dos patas es una obligación negociable
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -70,7 +77,7 @@ def _fill_price(levels, qty) -> (Optional[float], bool):
     return (f.avg_price, True) if f.complete else (levels[0].price, False)
 
 
-def implied_fx_quotes(view: MarketView, params: TradingParams) -> List[FxQuote]:
+def implied_fx_quotes(view: MarketView, params: TradingParams, instrument: str = "BONO") -> List[FxQuote]:
     fee = params.commission_pct / 100.0
     out: List[FxQuote] = []
     for base, books in view.by_base().items():
@@ -108,8 +115,55 @@ def implied_fx_quotes(view: MarketView, params: TradingParams) -> List[FxQuote]:
                         sell_usd_rate=round(sell, 2) if sell else None,
                         buy_depth_ok=ok1 and ok2, sell_depth_ok=ok3 and ok4,
                         nominal=round(nominal) if nominal else None, notes=notes,
-                        source=combined_source(ars, usd),
+                        source=combined_source(ars, usd), instrument=instrument,
                     ))
+    return out
+
+
+REFERENCE_BOND = "AL30"
+
+
+def annotate_vs_reference(quotes: List[FxQuote]) -> None:
+    """Compara el TC de compra de cada cotización con el de AL30 (mismo dólar y plazos)."""
+    ref = {(q.kind, q.ars_settlement, q.usd_settlement): q.buy_usd_rate
+           for q in quotes if q.base == REFERENCE_BOND and q.buy_usd_rate}
+    for q in quotes:
+        r = ref.get((q.kind, q.ars_settlement, q.usd_settlement))
+        if r and q.buy_usd_rate:
+            q.vs_reference_pct = round((q.buy_usd_rate / r - 1.0) * 100.0, 3)
+
+
+def best_on_round_trips(quotes: List[FxQuote], params: TradingParams) -> List[FxRoundTrip]:
+    """
+    Mejor ida y vuelta por dólar y plazo con al menos una pata en una ON (la otra puede ser una ON
+    u otro bono). Misma cuenta y mismos requisitos de profundidad que con bonos.
+    """
+    out: List[FxRoundTrip] = []
+    for kind in ("MEP", "CCL"):
+        for s in SETTLEMENTS:
+            same = [q for q in quotes if q.kind == kind and q.ars_settlement == s and q.usd_settlement == s]
+            buys = [q for q in same if q.buy_usd_rate and q.buy_depth_ok]
+            sells = [q for q in same if q.sell_usd_rate and q.sell_depth_ok]
+            best = None
+            for b in buys:
+                for v in sells:
+                    if b.base == v.base or "ON" not in (b.instrument, v.instrument):
+                        continue
+                    net = (v.sell_usd_rate / b.buy_usd_rate - 1.0) * 100.0
+                    if best is None or net > best[0]:
+                        best = (net, b, v)
+            if best is None:
+                continue
+            net, b, v = best
+            notes = [f"4 operaciones con costo {params.commission_pct}% c/u ya incluido.",
+                     "Las ON suelen tener poco volumen: confirmar las puntas en el broker antes de operar.",
+                     "Verificar restricciones vigentes de CNV para operaciones con dólar MEP/CCL."]
+            out.append(FxRoundTrip(
+                kind=kind, settlement=s, buy_with=b.base, sell_with=v.base,
+                buy_usd_rate=b.buy_usd_rate, sell_usd_rate=v.sell_usd_rate, net_pct=round(net, 4),
+                signal=net >= params.min_net_profit_pct, notes=notes,
+                source=b.source if b.source == v.source else MIXED_SOURCE, instrument="ON",
+            ))
     return out
 
 

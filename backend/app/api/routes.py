@@ -44,6 +44,8 @@ from backend.app.services.market_book_service import MarketBookService
 from backend.app.services.reference_data_service import ReferenceDataService
 from backend.app.services.market_calendar import MarketCalendar, next_business_day
 from backend.app.services.source_health import source_health
+from backend.app.services.quote_table import consolidate
+from backend.app.services.on_cashflows import OnCashflowService, OnCashflowUnavailable
 from backend.app.services.bullmarket_session import InvalidCookieError
 from backend.app.services.alert_service import AlertService, get_prefs, update_prefs
 from backend.app.services.trading_settings import get_params, update_params
@@ -53,6 +55,7 @@ router = APIRouter()
 ingestion_service = IngestionService()
 market_book_service = MarketBookService()
 bullmarket_session = market_book_service.bm_session
+on_cashflow_service = OnCashflowService(bullmarket_session)
 arbitrage_engine = ArbitrageEngine(ingestion_service, book_service=market_book_service)
 alert_service = AlertService()
 arbitrage_engine.listeners.append(alert_service.on_evaluation)
@@ -107,6 +110,33 @@ def get_latest_quotes(
     """Obtiene las cotizaciones y métricas más recientes de los bonos para un plazo de liquidación."""
     quotes = ingestion_service.get_latest_quotes(db, bond_type=bond_type, settlement=settlement)
     return quotes
+
+
+@router.get("/quotes/table", tags=["Market Data"])
+def get_quotes_table(
+    bond_type: Optional[str] = Query(None, description="Filtrar por tipo: HARD_DOLLAR, ON, CER, TASA_FIJA, ..."),
+    settlement: str = Query("24HS", pattern="^(?i:CI|24HS)$", description="Plazo de liquidación: CI o 24HS"),
+    db: Session = Depends(get_db),
+):
+    """
+    Una fila por instrumento (pesos / MEP / cable juntos). Con sesión de Bull Market vigente, los
+    precios son el último operado en Bull Market; si no, los de bonistas.com.
+    """
+    st = settlement.upper()
+    quotes = [q.model_dump() for q in
+              ingestion_service.get_latest_quotes(db, bond_type=bond_type, settlement=st)]
+    live_books: Dict[str, Any] = {}
+    # Bonos con prioridad sobre ON si un símbolo viniera en los dos índices
+    for source in (market_book_service.BULLMARKET_ON, market_book_service.BULLMARKET):
+        keys = market_book_service.live_keys(source, max_age_seconds=settings.BULLMARKET_MAX_AGE_SECONDS)
+        if not keys:
+            continue
+        for b in market_book_service.latest_books(db, source=source, settlement=st):
+            if (b.symbol, b.settlement) in keys:
+                live_books[b.symbol] = b
+    return {"settlement": st, "live_source": "BULLMARKET" if live_books else None,
+            "rows": consolidate(quotes, live_books, market_book_service.on_names)}
+
 
 @router.get("/macro", tags=["Macro"])
 def get_macro_indicators(db: Session = Depends(get_db)):
@@ -329,7 +359,7 @@ def _reference_cashflows(ref, s_date: date) -> List[CashFlowItem]:
 
 
 @router.get("/bonds/{ticker}/cashflows", response_model=List[CashFlowItemResponse], tags=["Quant Analytics"])
-def get_bond_cashflows(
+async def get_bond_cashflows(
     ticker: str,
     settlement_date: Optional[date] = Query(None, description="Fecha de liquidación (default: próximo día hábil)"),
     db: Session = Depends(get_db)
@@ -337,7 +367,26 @@ def get_bond_cashflows(
     """
     Flujos de fondos futuros por 100 VN. Para Bonares/Globales se detalla renta, amortización y
     residual; para el resto (fuente CompararBonos) solo se conoce el flujo total de cada fecha.
+    Las obligaciones negociables salen de Bull Market (requiere la sesión activa).
     """
+    on_bond = _find_bond(db, ticker)
+    if on_bond is not None and on_bond.bond_type == "ON":
+        s_date = _resolve_settlement_date(settlement_date, "24HS")
+        try:
+            sch = await on_cashflow_service.get(on_bond.ticker)
+        except OnCashflowUnavailable as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        pay = getattr(sch, "payment_currency", None)
+        return [
+            CashFlowItemResponse(
+                date=r.date, days_from_settlement=(r.date - s_date).days, interest_rate=None,
+                coupon_amount=r.coupon, amortization_amount=r.amortization, total_cashflow=r.total,
+                residual_capital=r.residual, source="BULLMARKET", currency=sch.currency,
+                payment_currency=pay,
+            )
+            for r in sch.rows if r.date > s_date
+        ]
+
     bond, ref = _cashflow_source(db, ticker)
     s_date = _resolve_settlement_date(settlement_date, "24HS")
 
@@ -697,6 +746,37 @@ def get_fx_implied(
         "best_to_buy_usd": [q.to_dict() for q in buys[:30]],
         "best_to_sell_usd": [q.to_dict() for q in sells[:30]],
         "round_trips": [t.to_dict() for t in scan.fx_round_trips if t.kind == k],
+    }
+
+
+@router.get("/arbitrage/on-relative-value", tags=["Arbitrage Engine"])
+def get_on_relative_value(db: Session = Depends(get_db)):
+    """
+    Obligaciones negociables en dólares: TIR y duration con precio de Bull Market y cronograma de
+    Bull Market, spread contra su emisor y contra el soberano, e ideas de canje (informativo).
+    """
+    from backend.app.arbitrage.on_relative_value import analyze_ons, sovereign_curve
+    scan = arbitrage_engine.scan(db)
+    quotes = [q.model_dump() for q in ingestion_service.get_latest_quotes(db, settlement="24HS")]
+    schedules = on_cashflow_service.schedules()
+    rows, ideas = analyze_ons(
+        scan.on_view, schedules, ingestion_service.issuer_by_ticker,
+        {q["ticker"]: q for q in quotes}, sovereign_curve(quotes), scan.params.commission_pct,
+    )
+    live = scan.on_view is not None and bool(scan.on_view.books)
+    status = None
+    if not settings.BULLMARKET_ON_ENABLED:
+        status = "Deshabilitado (BULLMARKET_ON_ENABLED)."
+    elif not schedules:
+        status = ("Sin cronogramas de ON todavía: se descargan de Bull Market una vez por día con la "
+                  "sesión activa (durante la rueda).")
+    elif not live:
+        status = "Sin precios de ON en tiempo real: se usan los de bonistas.com, con demora."
+    return {
+        "params": scan.params.to_dict(), "settlement": "24HS",
+        "settlement_date": scan.on_view.next_bd if scan.on_view is not None else None,
+        "schedules": len(schedules), "live": live, "status": status,
+        "rows": [r.to_dict() for r in rows], "swap_ideas": [i.to_dict() for i in ideas],
     }
 
 

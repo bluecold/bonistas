@@ -52,6 +52,22 @@ async def refresh_bullmarket_cashflows(db, force: bool = False) -> None:
         logger.warning(f"Cronogramas de Bull Market: {e}")
 
 
+async def refresh_on_cashflows(db) -> None:
+    """Una vez por día, con la sesión activa: cronogramas de todas las ON (valor relativo)."""
+    from datetime import date as _date
+    from backend.app.api.routes import bullmarket_session, on_cashflow_service
+    from backend.app.services.on_cashflows import on_base_tickers
+    if not settings.BULLMARKET_ON_ENABLED or bullmarket_session.status != "ACTIVA":
+        return
+    if on_cashflow_service.prefetched_day == _date.today():
+        return
+    try:
+        await on_cashflow_service.prefetch(on_base_tickers(db))
+    except Exception as e:
+        on_cashflow_service.prefetched_day = _date.today()      # no reintentar en cada ciclo
+        logger.warning(f"Cronogramas de ON: {e}")
+
+
 async def run_market_cycle(db, include_bullmarket: bool = True) -> None:
     """
     Un ciclo completo: analítica (Bonistas), libro de BYMA, libro de Bull Market en tiempo
@@ -65,6 +81,7 @@ async def run_market_cycle(db, include_bullmarket: bool = True) -> None:
     if include_bullmarket:
         await market_book_service.ingest_bullmarket(db)
         await refresh_bullmarket_cashflows(db)
+        await refresh_on_cashflows(db)
     check_source_alerts(db)
     # Las alertas de oportunidades nuevas las dispara el motor (listener de alert_service)
     arbitrage_engine.evaluate_all_strategies(db)

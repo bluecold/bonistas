@@ -174,8 +174,13 @@ class ArbitrageStrategies:
         Sin datos de duration, cae al primero disponible de cada tipo.
         """
         MIN_MD = 0.15
-        fixed = [q for q in quotes_by_ticker.values() if q.bond_type == "TASA_FIJA" and q.ytm_percentage]
-        cer = [q for q in quotes_by_ticker.values() if q.bond_type == "CER" and q.ytm_percentage]
+        # Solo especies en pesos: las especies en dólares (TA7D, T2D8D...) repiten el bono
+        def peso_species(q) -> bool:
+            return q.price_ars is not None or (q.price_mep is None and q.price_ccl is None)
+        fixed = [q for q in quotes_by_ticker.values()
+                 if q.bond_type == "TASA_FIJA" and q.ytm_percentage and peso_species(q)]
+        cer = [q for q in quotes_by_ticker.values()
+               if q.bond_type == "CER" and q.ytm_percentage and peso_species(q)]
         with_md = [
             (abs(f.modified_duration - c.modified_duration), f, c)
             for f in fixed for c in cer

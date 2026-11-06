@@ -11,6 +11,8 @@ class CashFlowItemResponse(BaseModel):
     total_cashflow: float
     residual_capital: Optional[float] = None
     source: str = "PROPIO"   # PROPIO (cronograma verificado) o COMPARARBONOS (solo flujo total)
+    currency: Optional[str] = None          # moneda de los montos (USD / ARS), cuando se conoce
+    payment_currency: Optional[str] = None  # ON: dólar de pago (MEP / CCL) según Bull Market
 
 class ValuationRequest(BaseModel):
     ticker: str = Field(..., description="Ticker del bono, ej: AL30, GD30, GD29")

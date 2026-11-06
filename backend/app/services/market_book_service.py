@@ -23,10 +23,12 @@ from backend.app.data.byma_client import BookRow, BymaClient, pick_overnight_cau
 from backend.app.services.bullmarket_session import BullMarketSession
 from backend.app.db.models import BookQuote, MacroIndicator
 from backend.app.services.source_health import source_health
+from backend.app.config import settings
 
 logger = logging.getLogger(__name__)
 
 Key = Tuple[str, str, str]  # (source, symbol, settlement)
+BULLMARKET_ON_INDEX = "obligacionesNegociables"
 
 
 def _depth_of(row) -> Optional[Dict[str, list]]:
@@ -50,10 +52,21 @@ class LiveSnapshot:
     keys: Set[Tuple[str, str]]   # (symbol, settlement)
 
 
+def on_name_score(name: str) -> int:
+    """Qué tan completa es una descripción de ON: empresa, clase, tasa, moneda y vencimiento."""
+    n = (name or "").lower()
+    if not n:
+        return -1
+    score = sum(k in n for k in ("clase", "tasa", "usd", "vto."))
+    score += 0 if n.startswith("on ") else 1          # "ON YPF - ..." / "ON PAMPA ... Cl." abrevian
+    return score
+
+
 class MarketBookService:
     SOURCE = "BYMA"
 
     BULLMARKET = "BULLMARKET"
+    BULLMARKET_ON = "BULLMARKET_ON"     # obligaciones negociables: solo para la tabla de cotizaciones
 
     def __init__(self, byma: Optional[BymaClient] = None,
                  bullmarket: Optional[BullMarketClient] = None,
@@ -65,6 +78,7 @@ class MarketBookService:
         self._loaded_sources: set = set()
         self.live: Dict[str, LiveSnapshot] = {}
         self.bm_just_expired = False     # para la notificación de la etapa 5
+        self.on_names: Dict[str, str] = {}   # ON -> descripción más completa entre sus especies
 
     # ------------------------------------------------------------------ helpers
     def _ensure_cache(self, db: Session, source: str) -> None:
@@ -165,14 +179,56 @@ class MarketBookService:
             source_health.failure(self.BULLMARKET, e)
             logger.error(f"Bull Market (guardado): {e}")
             return {"error": str(e), "status": sess.status}
-        self.live[self.BULLMARKET] = LiveSnapshot(
+        self.live[self.BULLMARKET] = self._snapshot(rows)
+        sess.mark_ok(len(rows))
+        source_health.success(self.BULLMARKET, rows=len(rows), **stats)
+        result: Dict[str, Any] = {"books": stats, "rows": len(rows), "status": sess.status}
+        if settings.BULLMARKET_ON_ENABLED:
+            result["on"] = await self._ingest_bullmarket_on(db, cookie)
+        return result
+
+    async def _ingest_bullmarket_on(self, db: Session, cookie: str) -> Dict[str, Any]:
+        """
+        Obligaciones negociables (índice `obligacionesNegociables`). Se guardan como fuente aparte
+        (BULLMARKET_ON) para que el motor de arbitraje no las mezcle con los bonos: solo las usa la
+        tabla de cotizaciones. Un error acá no afecta el estado de la sesión ni a los bonos.
+        """
+        try:
+            rows = await self.bullmarket.fetch_books(cookie, index=BULLMARKET_ON_INDEX)
+            stats = self.store_rows(db, rows, self.BULLMARKET_ON)
+        except Exception as e:
+            db.rollback()
+            self.live.pop(self.BULLMARKET_ON, None)
+            source_health.failure(self.BULLMARKET_ON, e)
+            logger.warning(f"Bull Market ON: {e}")
+            return {"error": str(e)}
+        self.live[self.BULLMARKET_ON] = self._snapshot(rows)
+        self._update_on_names(rows)
+        source_health.success(self.BULLMARKET_ON, rows=len(rows), **stats)
+        return {"books": stats, "rows": len(rows)}
+
+    def _update_on_names(self, rows: List[BookRow]) -> None:
+        """
+        Cada especie de una ON trae su propia descripción y no todas son igual de claras
+        ("ON YPF - USD 8.25% - Vto 17/01/2034" vs "YPF S.A. Clase XXXIV. Tasa Fija 8.25%. USD.
+        Vto. 01-2034"): se queda la más completa, guardada con el ticker base y con cada especie.
+        """
+        best: Dict[str, str] = {}
+        for r in rows:
+            if r.name and on_name_score(r.name) > on_name_score(best.get(r.base_ticker, "")):
+                best[r.base_ticker] = r.name
+        for r in rows:
+            if r.base_ticker in best:
+                self.on_names[r.base_ticker] = best[r.base_ticker]
+                self.on_names[r.symbol] = best[r.base_ticker]
+
+    @staticmethod
+    def _snapshot(rows: List[BookRow]) -> LiveSnapshot:
+        return LiveSnapshot(
             fetched_at=datetime.now(timezone.utc),
             keys={(r.symbol, r.settlement) for r in rows
                   if r.bid is not None or r.ask is not None or r.last is not None},
         )
-        sess.mark_ok(len(rows))
-        source_health.success(self.BULLMARKET, rows=len(rows), **stats)
-        return {"books": stats, "rows": len(rows), "status": sess.status}
 
     def live_keys(self, source: str, max_age_seconds: float,
                   now: Optional[datetime] = None) -> Optional[Set[Tuple[str, str]]]:

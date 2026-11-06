@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     BULLMARKET_COOKIE_FILE: str = "secrets/bullmarket_cookie.txt"
     # Los libros de Bull Market solo se usan si la última consulta OK tiene menos de esta antigüedad
     BULLMARKET_MAX_AGE_SECONDS: int = 180
+    # Precios en tiempo real de obligaciones negociables (solo para la tabla de cotizaciones)
+    BULLMARKET_ON_ENABLED: bool = True
 
     # Notificaciones de escritorio de Windows (el panel de alertas del dashboard funciona siempre)
     WINDOWS_NOTIFICATIONS: bool = True

@@ -357,3 +357,18 @@ def test_api_session_lifecycle(client):
 
     r = client.delete("/api/v1/bullmarket/session")
     assert r.json()["status"] == "NO_CONFIGURADA" and not bullmarket_session.cookie_file.exists()
+
+
+async def test_ingest_on_is_separate_source_not_seen_by_engine(db_session, session):
+    session.set_cookie(TEST_BM_COOKIE)
+    svc = MarketBookService(bm_session=session)
+    res = await svc.ingest_bullmarket(db_session)
+    assert res["on"]["rows"] > 0
+    on = db_session.execute(select(BookQuote).where(
+        BookQuote.source == "BULLMARKET_ON", BookQuote.symbol == "YM34D", BookQuote.settlement == "24HS")).scalar_one()
+    assert on.currency == "MEP" and on.last
+    assert ("YM34O", "24HS") in svc.live["BULLMARKET_ON"].keys
+    # El motor de arbitraje solo consulta BULLMARKET / BYMA: las ON no aparecen
+    view = build_market_view(db_session, ("BULLMARKET", "BYMA"), book_service=svc,
+                             live_max_age={"BULLMARKET": 180})
+    assert view.book("YM34D", "24HS") is None

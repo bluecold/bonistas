@@ -21,7 +21,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.arbitrage.ci_24hs import CiOpportunity, detect_ci_vs_24hs
-from backend.app.arbitrage.fx_implied import FxRoundTrip, best_round_trips, implied_fx_quotes
+from backend.app.arbitrage.fx_implied import (
+    FxRoundTrip, annotate_vs_reference, best_on_round_trips, best_round_trips, implied_fx_quotes,
+)
 from backend.app.arbitrage.market_view import MarketView, build_market_view
 from backend.app.config import settings
 from backend.app.services.market_book_service import MarketBookService
@@ -46,6 +48,7 @@ LAW_ROTATE_TO_ARG_MIN_Z = 1.5
 
 # TIEMPO_REAL: todas las patas con puntas de Bull Market. PARCIAL: alguna pata con BYMA (demora).
 CONFIRMATION_BY_SOURCE = {"BYMA": "DEMORA_20MIN", "BULLMARKET": "TIEMPO_REAL", "MIXTO": "PARCIAL"}
+ON_SOURCE = "BULLMARKET_ON"
 
 
 @dataclass
@@ -56,6 +59,7 @@ class ScanResult:
     fx_quotes: list = field(default_factory=list)
     fx_round_trips: List[FxRoundTrip] = field(default_factory=list)
     ratios: List[PairRatio] = field(default_factory=list)
+    on_view: Optional[MarketView] = None     # libros de ON (Bull Market), aparte de los bonos
 
 
 def signal_key(s: ArbitrageSignalCreate) -> str:
@@ -89,6 +93,18 @@ class ArbitrageEngine:
         result.ci_24hs = detect_ci_vs_24hs(view, params)
         result.fx_quotes = implied_fx_quotes(view, params)
         result.fx_round_trips = best_round_trips(result.fx_quotes, params)
+        if settings.BULLMARKET_ON_ENABLED:
+            # Las ON van en una vista propia: solo participan del dólar implícito y del valor
+            # relativo, nunca del CI vs 24hs ni de los ratios de bonos.
+            result.on_view = build_market_view(
+                db, sources=(ON_SOURCE,), now=now, book_service=self.book_service,
+                live_max_age={ON_SOURCE: settings.BULLMARKET_MAX_AGE_SECONDS},
+            )
+            on_quotes = implied_fx_quotes(result.on_view, params, instrument="ON")
+            if on_quotes:
+                result.fx_quotes += on_quotes
+                result.fx_round_trips += best_on_round_trips(result.fx_quotes, params)
+        annotate_vs_reference(result.fx_quotes)
         result.ratios = compute_pair_ratios(db, view, params)
         return result
 
@@ -125,7 +141,7 @@ class ArbitrageEngine:
             if not t.signal:
                 continue
             out.append(ArbitrageSignalCreate(
-                strategy_name=f"{t.kind}_IDA_VUELTA",
+                strategy_name=f"{t.kind}_IDA_VUELTA" + ("_ON" if t.instrument == "ON" else ""),
                 leg_sell_ticker=f"{t.sell_with} {t.settlement}",
                 leg_buy_ticker=f"{t.buy_with} {t.settlement}",
                 metric_name="GANANCIA_NETA_PCT",

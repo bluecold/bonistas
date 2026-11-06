@@ -83,8 +83,13 @@ def _trade_time(v: Any) -> Optional[str]:
     return None
 
 
-def parse_stock_prices(raw_rows: List[Dict[str, Any]], term: Optional[str] = None) -> List[BookRow]:
-    """Normaliza `result` de GetStockPrices a filas de libro con hasta 5 niveles de profundidad."""
+def parse_stock_prices(raw_rows: List[Dict[str, Any]], term: Optional[str] = None,
+                       use_parent: bool = False) -> List[BookRow]:
+    """
+    Normaliza `result` de GetStockPrices a filas de libro con hasta 5 niveles de profundidad.
+    use_parent: el ticker base sale de `parentTicker` (ON: YM34D / YM34C -> YM34O), que el sufijo
+    no permite deducir. En bonos se mantiene la regla de siempre.
+    """
     tickers = {str(r.get("ticker", "")).strip().upper() for r in raw_rows if isinstance(r, dict)}
     out: List[BookRow] = []
     for r in raw_rows:
@@ -101,7 +106,8 @@ def parse_stock_prices(raw_rows: List[Dict[str, Any]], term: Optional[str] = Non
         ops = state.get("operations")
         out.append(BookRow(
             symbol=symbol,
-            base_ticker=species_base(symbol, currency, tickers),
+            base_ticker=(str(r.get("parentTicker") or "").strip().upper() if use_parent else "")
+            or species_base(symbol, currency, tickers),
             currency=currency,
             settlement=settlement,
             bid=bids[0][0] if bids else None,
@@ -117,6 +123,7 @@ def parse_stock_prices(raw_rows: List[Dict[str, Any]], term: Optional[str] = Non
             maturity_date=None,
             bids=bids,
             asks=asks,
+            name=str(r.get("name") or "").strip() or None,
         ))
     return out
 
@@ -169,7 +176,8 @@ class BullMarketClient:
         rows: List[BookRow] = []
         for st in settlements:
             term = SETTLEMENT_TO_TERM[st]
-            rows += parse_stock_prices(await self.fetch_raw(cookie, term, index), term)
+            rows += parse_stock_prices(await self.fetch_raw(cookie, term, index), term,
+                                       use_parent=index != "bonos")
         return rows
 
 

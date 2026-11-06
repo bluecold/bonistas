@@ -122,7 +122,8 @@ MIXED_SOURCE = "MIXTO"
 
 def combined_source(*books: Optional["Book"]) -> str:
     """Fuente de una operación con varias patas: la común a todas, o MIXTO si difieren."""
-    sources = {b.source for b in books if b is not None}
+    # Las ON de Bull Market se guardan como fuente aparte, pero son el mismo tiempo real
+    sources = {"BULLMARKET" if b.source == "BULLMARKET_ON" else b.source for b in books if b is not None}
     if len(sources) == 1:
         return sources.pop()
     return MIXED_SOURCE if sources else "SIN_DATOS"

@@ -79,6 +79,7 @@ class BookRow:
     # Profundidad completa [(precio, cantidad), ...] cuando la fuente la publica (Bull Market: 5 niveles)
     bids: Optional[List[Tuple[float, float]]] = None
     asks: Optional[List[Tuple[float, float]]] = None
+    name: Optional[str] = None     # descripción de la fuente (Bull Market: "Mirgor. Clase IV. ...")
 
 
 def parse_bond_rows(raw_rows: List[Dict[str, Any]]) -> List[BookRow]:
