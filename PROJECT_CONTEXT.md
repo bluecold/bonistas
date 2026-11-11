@@ -40,13 +40,17 @@ Avisa por **notificación de Windows** y en el **dashboard**. **No ejecuta órde
 | MAE | `data/mae_client.py` | Próximos feriados (Argentina y EE.UU.) | Diario y al iniciar |
 | DolarAPI / ArgentinaDatos | `data/dolar_api_client.py`, `macro_connectors.py` | MEP/CCL de referencia, IPC | Cada 60 s / diario |
 
-Descartadas: Rava, PuenteNet, Screenermatic, Docta, AnálisisTécnico (token, login, 403 o captcha) y Nix Valores (API privada de broker, sin `robots.txt`, certificado TLS incompleto).
+Rava: descartada para cotizaciones en vivo, pero su descarga de históricos diarios (CSV, sin sesión) sí se usa para las bandas de los ratios (§2.2). Descartadas: PuenteNet, Screenermatic, Docta, AnálisisTécnico (token, login, 403 o captcha) y Nix Valores (API privada de broker, sin `robots.txt`, certificado TLS incompleto).
 
 ### 2.2 Detectores y señales (`backend/app/arbitrage/`)
 * `market_view.py`: libros por especie/plazo con **prioridad Bull Market > BYMA** (solo si la última consulta OK de Bull Market tiene < 180 s y la especie vino en esa respuesta), referencia MEP (implícito AL30), caución 1 día y flujos por bono. `flow_between` suma los pagos que **cortan** entre las dos liquidaciones.
-* `ci_24hs.py`: CI vs 24hs en las dos direcciones, recorriendo la profundidad del libro para el tamaño configurado. Resguardos: sin cronograma ⇒ sin señal; brecha ≥ 3% que ya existía al cierre anterior, o ≥ 10% ⇒ `CORTE_PROBABLE`, sin señal.
-* `fx_implied.py`: TC de compra/venta de dólares por bono y mejor ida y vuelta (4 patas en el mismo plazo).
-* `ratios.py`: AL/GD y pares de curva con puntas; z-score solo con ≥ 20 ruedas de historia real.
+* `ci_24hs.py`: CI vs 24hs en las dos direcciones, recorriendo la profundidad del libro para el tamaño configurado. Resguardos: sin cronograma ⇒ sin señal; brecha ≥ 3% que ya existía al cierre anterior, o ≥ 10% ⇒ `CORTE_PROBABLE`, sin señal; brecha ≥ 10% aun después de descontar un pago del cronograma ⇒ `AJUSTE_DUDOSO`, sin señal (caso S13N6: pago final al vencimiento que CI y 24hs cotizan los dos adentro).
+* `fx_implied.py`: TC de compra/venta de dólares por bono y mejor ida y vuelta (4 patas en el mismo plazo). `cable_to_mep_quotes`: pasar dólares cable a MEP con un mismo título (comprar la especie C, vender la D, 2 comisiones), ordenado de mejor a peor; informativo, sin señal ni alerta.
+* `ratios.py`: AL/GD y pares de curva con puntas. Cada par tiene su **banda propia** (media de 21 ruedas ± 1,5 desvíos, con cierres diarios de Rava; sin cortes fijos comunes). Señal de banda = ratio fuera de la banda + volver a la media cubre las 4 operaciones y la ganancia mínima + la banda fue rentable en ese par en la prueba con el último año de cierres (≥ 5 señales, ≥ 70% ganadoras, neto medio ≥ 0,5%). Si no, queda informativa. Es estadística: sin `net_profit_pct`, no notifica en Windows.
+  * Pares (`pair_specs`): `LEY` (AL/GD, señal `LAW_PREMIUM`), `CURVA` (informativos), `CER` en pesos (cupón cero contiguos TZXM7 → TZX27 → TZXD7 → TZX28 → TZXS8 → TZXM9, TZXS7/TZXO7, DICP/DIP0, que tienen el mismo flujo, y TX31/DICP) y `TESORO_USD` en especie D (AO28/AO29, AO29/AN29). `CER` y `TESORO_USD` dan la señal `PAIR_BAND` con las mismas condiciones.
+  * **Ajuste por pagos** (AO29/AN29, renta mensual contra semestral, y TX31/DICP, amortizaciones distintas): la historia se corrige como un precio ajustado por dividendos con la tabla `bond_flow_log`. Esa tabla guarda todos los pagos, pasados (con el monto pagado en su momento) y futuros, del cronograma de Bull Market (`parse_payment_history` + `ReferenceDataService.store_payment_history`, dentro de `apply_bullmarket_cashflows`, una vez por día con la sesión activa). Sin pagos guardados el par no tiene banda (`SIN_PAGOS`). La rueda del corte se elige dentro de una ventana (de dos ruedas antes del pago a la rueda siguiente: TX28, AN29 y DICP cortaron en días distintos) por la mayor caída contra el otro bono. Dentro de esa ventana no hay banda (`CORTE_CUPON`). Verificado: en TX31/DICP el ajuste elimina los saltos de 9,6% y 8,9% de las amortizaciones de DICP.
+  * No entra AO27 (la prueba dio pérdidas). Los pares de curva en dólares (AE38/GD35, etc.) tienen cupones de distinto tamaño y todavía no se ajustan: siguen informativos.
+* `data/rava_client.py` + `services/price_history_service.py` + tabla `daily_closes`: historia diaria de las especies de los pares (D en los pares en dólares, pesos en los CER) (`rava.com/perfil/descarga-historicos/<especie>`, CSV sin sesión), una descarga por día (al iniciar y con la referencia de las 10:15), 1,5 s entre pedidos.
 * `engine.py`: concilia señales persistentes (clave `estrategia|venta|compra|acción`), confirmación por fuente de las patas (`TIEMPO_REAL` / `PARCIAL` / `DEMORA_20MIN`), Command Center y listeners de alertas.
 * `strategies.py`: prima de legislación (fallback Bonistas), valor relativo AL30/GD29 y breakeven tasa fija vs CER.
 
@@ -73,7 +77,7 @@ Pestañas: Monitor de cotizaciones, Curvas de rendimiento (por familia, MEP/cabl
 3. **Corte de cupón**: un pago con fecha F lo cobra quien liquida **antes** de `ex_date(F)` = día hábil anterior a la fecha efectiva de pago (si F cae en fin de semana o feriado, se paga el día hábil siguiente). Verificado con TX28 el 05/11/2026.
 4. **Las fuentes pueden omitir un pago inminente** (CompararBonos excluye el pago ya cortado para su propia liquidación). Por eso: pagos próximos desde Bull Market + resguardo por brecha estructural.
 5. **Datos de una sola fuente secundaria no verificada** ⇒ sin señal CI vs 24hs a ±30 días de un pago.
-6. **Z-scores** solo con historia propia (≥ 20 ruedas); con calibración estática son informativos.
+6. **Ratios entre bonos**: banda por par con historia de Rava (ver §2.2). El valor relativo AL30/GD29 por TIR sigue usando historia propia (≥ 20 ruedas); con calibración estática es informativo.
 7. **TIR**: tasa efectiva anual, `MD = Macaulay / (1 + TIR)`. CompararBonos publica Macaulay: se convierte. Bonares/Globales 2020 con cronograma propio verificado y devengamiento 30/360.
 8. **MEP vs cable**: bonos que pagan en cable rinden distinto medidos en MEP o en CCL (la diferencia es el canje); las curvas permiten elegir.
 9. **Seguridad**: la cookie de Bull Market se pega solo en el dashboard y se guarda en `secrets/` (gitignored); no hay login automático; `temporal/`, `.env`, `secrets/` y `*.db` fuera de git. El texto de las notificaciones viaja por variables de entorno (nunca en el comando).
@@ -117,7 +121,7 @@ Tablas: `bonds`, `price_snapshots` (Bonistas, solo cambios), `book_quotes` (BYMA
 1. **Especies**: cada bono cotiza en pesos (`AL30`), MEP (`AL30D`) y cable (`AL30C`). Excepciones de nombre: BOPREAL (`BPOA7` pesos ↔ `BPA7D`/`BPA7C`), algunos provinciales (`SJO35` ↔ `SJO5D`, `NDG34` ↔ `NDG4D`, `BA37D` pesos ↔ `BA7DD` MEP). Tickers parecidos pueden ser bonos distintos (`CO2D7` es Córdoba Clase 5 en pesos TAMAR, no `CO27D`).
 2. **Liquidación**: CI = hoy; 24hs = próximo día hábil (saltea fines de semana y **feriados de Argentina**). La caución cubre los días corridos entre ambas.
 3. **Corte de cupón**: día hábil anterior al pago efectivo (§3.3). Las brechas CI/24hs alrededor de un pago son el cupón, no un arbitraje.
-4. **Ley local vs NY**: AL y GD tienen los mismos flujos; la prima NY oscila. Rotar a NY si el costo de pasar de AL a GD es ≤ 1%; a ARG si el ratio es ≥ 1,12 (o z ≥ 1,5 con historia).
+4. **Ley local vs NY**: AL y GD tienen los mismos flujos; la prima NY oscila. Rotar a NY si el costo de pasar de AL a GD es ≤ 1%. La prima alta o baja se mide contra la banda propia de cada par, no contra un nivel fijo: en 2026 la prima de los pares largos (35, 38, 41) pasó de ~3% a ~7–8% y no volvió, así que un corte fijo (el 1,12 anterior, o las referencias de un año atrás) queda viejo y en esos pares la banda tampoco fue rentable.
 5. **Canje**: CCL/MEP − 1; afecta la TIR de los bonos que pagan en cable.
 6. **Amortizaciones**: AL30/GD30 tienen 64% de residual a fines de 2026; VT y paridad sobre capital residual. Precios por 100 VN original, "sucios" (con corrido).
 7. **Provincia de Buenos Aires** cotiza en otro escalón de riesgo: serie aparte en la curva provincial.
@@ -130,7 +134,8 @@ Tablas: `bonds`, `price_snapshots` (Bonistas, solo cambios), `book_quotes` (BYMA
 * **Tabla comparativa de Bull Market** (`/Clients/ComparativeTables/bonos`): TIR CI/24hs, paridad y VT de todos los bonos cada 5 min; podría reemplazar a Bonistas. Falta identificar la llamada de datos.
 * **Provinciales sin precio en BYMA**: BP28, BPLD, BPLE, CO27D, PUL26 (no cotizan).
 * **Confirmar** el tratamiento de los días no laborables con fin turístico.
-* **Historia propia**: a partir de ~20 ruedas de uso, los z-scores pasan a ser accionables.
+* **Historia propia**: a partir de ~20 ruedas de uso, el z-score del valor relativo AL30/GD29 pasa a ser accionable (los ratios entre bonos ya usan la historia de Rava).
+* **Bandas en pares largos** (35, 38, 41): hoy informativas porque la prueba histórica no da; se habilitan solas cuando la prima se estabilice y la prueba vuelva a dar.
 * WebSockets/SSE en lugar del polling del dashboard.
 
 ### 6.1 Backlog acordado para una versión futura (fuera de v1.1)

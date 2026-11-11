@@ -4,6 +4,7 @@ notificación de Windows.
 
 Eventos:
 - OPORTUNIDAD: aparece una señal nueva (solo cuando aparece, no en cada ciclo mientras siga activa).
+- OBSERVACION: señal estadística sin ganancia neta calculada. Solo panel: no notifica ni suma al contador.
 - CONFIRMADA: una señal detectada con BYMA (demora) pasa a estar confirmada con Bull Market.
 - SESION_VENCIDA: Bull Market rechazó la cookie (una sola vez por vencimiento).
 - FUENTE_CAIDA / FUENTE_OK: una fuente falla N ciclos seguidos / vuelve a responder.
@@ -131,6 +132,14 @@ class AlertService:
         """Listener del motor: se llama después de cada evaluación."""
         prefs = get_prefs(db)
         for s in new:
+            if s.net_profit_pct is None:
+                # Señal estadística (breakeven, prima de ley, valor relativo): no es un arbitraje
+                # con ganancia neta calculada. Queda en el panel, sin notificación ni contador.
+                self.emit(
+                    db, "OBSERVACION", "INFO", f"{s.strategy_name} · señal estadística, sin ganancia neta",
+                    self._signal_text(s), dedupe_key=f"SIGNAL|{s.signal_key}", signal_id=s.id, toast=False,
+                )
+                continue
             realtime = s.confirmation == "TIEMPO_REAL"
             toast = prefs.windows and (realtime or not prefs.only_realtime)
             label = CONFIRMATION_LABEL.get(s.confirmation, s.confirmation or "")
@@ -140,6 +149,8 @@ class AlertService:
                 self._signal_text(s), dedupe_key=f"SIGNAL|{s.signal_key}", signal_id=s.id, toast=toast,
             )
         for s in upgraded:
+            if s.net_profit_pct is None:
+                continue
             # Siempre se avisa: es justamente el momento de operar
             self.emit(
                 db, "CONFIRMADA", "OPORTUNIDAD",
@@ -191,6 +202,36 @@ class AlertService:
     def unread_count(db: Session) -> int:
         from sqlalchemy import func
         return db.execute(select(func.count(Alert.id)).where(Alert.read.is_(False))).scalar() or 0
+
+    @staticmethod
+    def pending_count(db: Session) -> int:
+        """
+        Lo que muestra la campanita: avisos sin leer que todavía importan. Una oportunidad cuenta
+        solo mientras su señal sigue activa; las señales estadísticas no cuentan.
+        """
+        from sqlalchemy import func, or_
+        active_ids = select(ArbitrageSignal.id).where(ArbitrageSignal.status == "ACTIVE")
+        return db.execute(
+            select(func.count(Alert.id)).where(
+                Alert.read.is_(False), Alert.kind != "OBSERVACION",
+                or_(Alert.signal_id.is_(None), Alert.signal_id.in_(active_ids)),
+            )
+        ).scalar() or 0
+
+    @staticmethod
+    def describe(db: Session, alerts: List[Alert]) -> List[Dict[str, Any]]:
+        """to_dict + vigencia de la señal asociada (signal_status, signal_last_seen)."""
+        ids = {a.signal_id for a in alerts if a.signal_id}
+        signals = {s.id: s for s in db.execute(
+            select(ArbitrageSignal).where(ArbitrageSignal.id.in_(ids))).scalars()} if ids else {}
+        out = []
+        for a in alerts:
+            d = AlertService.to_dict(a)
+            s = signals.get(a.signal_id)
+            d["signal_status"] = (s.status if s else "EXPIRED") if a.signal_id else None
+            d["signal_last_seen"] = s.last_seen.isoformat() if s and s.last_seen else None
+            out.append(d)
+        return out
 
     @staticmethod
     def mark_read(db: Session, ids: Optional[List[int]] = None) -> int:

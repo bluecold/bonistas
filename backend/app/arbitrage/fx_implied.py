@@ -120,6 +120,54 @@ def implied_fx_quotes(view: MarketView, params: TradingParams, instrument: str =
     return out
 
 
+@dataclass
+class CableToMep:
+    base: str
+    cable_symbol: str
+    mep_symbol: str
+    settlement: str
+    buy_price: float          # vendedora de la especie C
+    sell_price: float         # compradora de la especie D
+    net_pct: float            # dólares MEP obtenidos por dólar cable, menos 1, costos incluidos
+    depth_ok: bool
+    nominal: Optional[float]
+    notes: List[str] = field(default_factory=list)
+    source: str = "BYMA"
+    instrument: str = "BONO"
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+def cable_to_mep_quotes(view: MarketView, params: TradingParams, instrument: str = "BONO") -> List[CableToMep]:
+    """
+    Pasar dólares cable a MEP con un mismo título: comprarlo en especie C (vendedora) y venderlo en
+    especie D (compradora), mismo plazo. Sirve al cobrar renta en cable: si el neto es positivo,
+    deja más dólares MEP que una conversión 1 a 1. Ordenado de mejor a peor. Es informativo.
+    """
+    fee = params.commission_pct / 100.0
+    out: List[CableToMep] = []
+    for base, books in view.by_base().items():
+        for s in SETTLEMENTS:
+            cable, mep = books.get(("CCL", s)), books.get(("MEP", s))
+            if not cable or not mep or not cable.asks or not mep.bids:
+                continue
+            nominal = view.nominal_for_usd(params.trade_size_usd, cable.best_ask, "CCL")
+            ask_c, ok1 = _fill_price(cable.asks, nominal)
+            bid_d, ok2 = _fill_price(mep.bids, nominal)
+            if not ask_c or not bid_d:
+                continue
+            net = ((bid_d * (1 - fee)) / (ask_c * (1 + fee)) - 1.0) * 100.0
+            out.append(CableToMep(
+                base=base, cable_symbol=cable.symbol, mep_symbol=mep.symbol, settlement=s,
+                buy_price=ask_c, sell_price=bid_d, net_pct=round(net, 3), depth_ok=ok1 and ok2,
+                nominal=round(nominal) if nominal else None,
+                notes=[f"2 operaciones con costo {params.commission_pct}% c/u ya incluido."],
+                source=combined_source(cable, mep), instrument=instrument,
+            ))
+    return sorted(out, key=lambda c: c.net_pct, reverse=True)
+
+
 REFERENCE_BOND = "AL30"
 
 

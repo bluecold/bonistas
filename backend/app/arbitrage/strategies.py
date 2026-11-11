@@ -32,7 +32,8 @@ class ArbitrageStrategies:
         """
         Estrategia 1: Spread de Legislación (Law Premium AL vs GD).
         - Regla A: Compresión hacia Ratio <= 1.01 o Spread TIR <= 20 bps -> ROTAR_A_NY (Vender AL, Comprar GD).
-        - Regla B: Ensanchamiento hacia Ratio >= 1.12 o Z >= +1.5 sigma -> ROTAR_A_ARG (Vender GD, Comprar AL).
+        - La rotación a Ley ARG por prima alta ya no se decide acá con un corte fijo común a todos
+          los pares: usa la banda propia de cada par sobre puntas (ratios.py / engine.py).
         """
         signals: List[ArbitrageSignalCreate] = []
         pairs = [
@@ -85,25 +86,6 @@ class ArbitrageStrategies:
                         notes=(
                             f"Compresión de brecha legal {al}/{gd}: Ratio {ratio:.4f} (prima {(ratio-1)*100:.2f}%). "
                             f"Oportunidad de rotar a Ley Nueva York con resguardo jurídico internacional sin penalidad de rendimiento."
-                        )
-                    )
-                )
-
-            # Regla B: Ensanchamiento anormal del spread de legislación
-            elif ratio >= 1.12 or z_score >= 1.5:
-                signals.append(
-                    ArbitrageSignalCreate(
-                        strategy_name="LAW_PREMIUM",
-                        leg_sell_ticker=gd,
-                        leg_buy_ticker=al,
-                        metric_name="SPREAD_PRICE_RATIO",
-                        metric_value=Decimal(str(ratio)),
-                        historical_mean=Decimal(str(HISTORICAL_LAW_RATIO_MEAN)),
-                        std_deviations=Decimal(str(z_score)),
-                        action_recommended="ROTAR_A_ARG",
-                        notes=(
-                            f"Ensanchamiento anormal de brecha legal {gd}/{al}: Ratio {ratio:.4f} ({z_score:+.2f} sigma). "
-                            f"Venta de GD y compra de AL anticipando compresión de spread hacia el promedio histórico."
                         )
                     )
                 )

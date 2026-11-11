@@ -231,3 +231,45 @@ def test_api_alerts(client):
     assert client.get("/api/v1/alerts", params={"after_id": t["id"]}).json()["alerts"] == []
     assert client.post("/api/v1/alerts/read", json={}).json()["unread"] == 0
     client.put("/api/v1/settings/notifications", json={"only_realtime": False})
+
+
+# ---------------------------------------------------------------------------
+# Campanita: vigencia de cada aviso y contador de pendientes
+# ---------------------------------------------------------------------------
+
+def gen_stat():
+    return ArbitrageSignalCreate(
+        strategy_name="BREAKEVEN_CER_FIXED", leg_sell_ticker="TZXM7", leg_buy_ticker="T30A7",
+        metric_name="BREAKEVEN", metric_value=Decimal("2.08"), action_recommended="ROTAR_A_TASA_FIJA",
+        notes="señal estadística",
+    )
+
+
+def test_pending_counts_only_active_opportunities(db, svc):
+    e = engine_with(svc)
+    e._reconcile(db, [gen(), gen(sell="GD30D CI", buy="GD30D 24HS")])
+    assert AlertService.pending_count(db) == 2
+    e._reconcile(db, [gen()])                      # la de GD30D expira
+    assert AlertService.unread_count(db) == 2      # el historial sigue completo
+    assert AlertService.pending_count(db) == 1     # la campanita cuenta solo la vigente
+    by_status = {d["signal_status"] for d in AlertService.describe(db, AlertService.list_alerts(db))}
+    assert by_status == {"ACTIVE", "EXPIRED"}
+    AlertService.mark_read(db)
+    assert AlertService.pending_count(db) == 0
+
+
+def test_source_alerts_count_as_pending_and_have_no_validity(db, svc):
+    svc.check_sources(db, {}, bm_just_expired=True, bm_status="VENCIDA")
+    assert AlertService.pending_count(db) == 1
+    d = AlertService.describe(db, AlertService.list_alerts(db))[0]
+    assert d["signal_status"] is None and d["signal_last_seen"] is None
+
+
+def test_statistical_signal_is_panel_only(db, svc, rec):
+    """Sin ganancia neta calculada: queda en el historial, sin notificación ni contador."""
+    e = engine_with(svc)
+    e._reconcile(db, [gen_stat()])
+    a = db.query(Alert).one()
+    assert a.kind == "OBSERVACION" and a.severity == "INFO" and not a.notified
+    assert "s/d" not in a.title
+    assert rec.sent == [] and AlertService.pending_count(db) == 0

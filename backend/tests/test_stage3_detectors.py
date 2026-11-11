@@ -197,12 +197,12 @@ def test_cross_settlement_skipped_when_bond_pays_in_between():
 # Ratios
 # ---------------------------------------------------------------------------
 
-def test_law_ratio_with_static_calibration(db_session):
+def test_law_ratio_without_history_has_no_band(db_session):
     v = view_of(bk("AL30D", "24HS", bid=52.50, ask=52.75), bk("GD30D", "24HS", bid=53.37, ask=54.50))
     r = next(x for x in compute_pair_ratios(db_session, v, PARAMS) if (x.a, x.b) == ("AL30", "GD30"))
     assert r.mid_ratio == pytest.approx(((53.37 + 54.50) / 2) / ((52.50 + 52.75) / 2), abs=1e-4)
     assert r.rotate_a_to_b == pytest.approx(52.50 * 0.9989 / (54.50 * 1.0011), abs=1e-4)
-    assert r.calibration == "ESTATICA"
+    assert r.calibration == "SIN_HISTORIA" and r.z_score is None and r.band_upper is None
 
 
 def test_law_ratio_with_real_history(db_session):
@@ -217,7 +217,7 @@ def test_law_ratio_with_real_history(db_session):
     db_session.commit()
     v = view_of(bk("AL30D", "24HS", bid=49.9, ask=50.1), bk("GD30D", "24HS", bid=53.4, ask=53.6))
     r = next(x for x in compute_pair_ratios(db_session, v, PARAMS) if (x.a, x.b, x.settlement) == ("AL30", "GD30", "24HS"))
-    assert r.calibration.startswith("HISTORICA_")
+    assert r.calibration.startswith("BANDA_") and r.history_source == "PROPIA"
     assert r.hist_mean == pytest.approx(1.03, abs=0.002)
     assert r.z_score > 3                          # 1,07 contra una media de 1,03
 
@@ -318,14 +318,20 @@ def test_legacy_and_duplicate_active_signals_all_expire(db_session):
     assert engine.last_expired_count == 0
 
 
-def test_statistical_rules_need_real_history(db_session):
-    """Sin 20 ruedas de historia, un z-score alto con calibración estática no genera señal."""
+def test_statistical_rules_need_a_reliable_band(db_session):
+    """Sin banda, o con una banda que no fue rentable en ese par, un ratio alto no genera señal."""
     from backend.app.arbitrage.engine import ArbitrageEngine as E
     from backend.app.arbitrage.ratios import PairRatio
     r = PairRatio(a="AL30", b="GD30", kind="LEY", settlement="24HS", mid_ratio=1.11, rotate_a_to_b=0.89,
-                  rotate_b_to_a=1.10, z_score=1.7, hist_mean=1.055, hist_std=0.032, calibration="ESTATICA")
+                  rotate_b_to_a=1.10, z_score=None, hist_mean=None, hist_std=None, calibration="SIN_HISTORIA")
     assert E._signals_from_law_ratios([r]) == []
-    r.calibration = "HISTORICA_40d"
+    r.z_score, r.hist_mean, r.hist_std, r.calibration = 3.2, 1.055, 0.017, "BANDA_21r"
+    r.band_lower, r.band_upper, r.long_mean = 1.0295, 1.0805, 1.05
+    r.band_signal, r.expected_net_pct = "B_TO_A", 4.1
+    r.backtest = {"signals": 12, "wins": 6, "avg_net_pct": 0.05, "worst_pct": -2.0, "reliable": False}
+    assert E._signals_from_law_ratios([r]) == []
+    r.reliable = True
+    r.backtest = {"signals": 12, "wins": 10, "avg_net_pct": 0.8, "worst_pct": -0.3, "reliable": True}
     assert [s.action_recommended for s in E._signals_from_law_ratios([r])] == ["ROTAR_A_ARG"]
 
 
@@ -382,3 +388,20 @@ def test_real_small_dislocation_still_signals():
     v = view_of(b1, b2, flows=NO_FLOWS)
     assert opp(detect_ci_vs_24hs(v, PARAMS), "XX27D", "VENDER_CI_COMPRAR_24HS").signal
 
+
+
+def test_adjustment_that_prices_do_not_reflect_never_signals():
+    """
+    Caso real S13N6 (11-nov-2026): paga 109,6514 al vencimiento (13-nov) y el cronograma marca un
+    corte entre CI y 24hs, pero las dos liquidaciones cotizan con el pago adentro. Descontarlo
+    fabricaba una "ganancia" de ~100%.
+    """
+    flows = {"S13N6": ("ARS", [(date(2026, 11, 13), 109.6514)])}
+    v = view_of(bk("S13N6", "CI", bid=109.45, ask=109.503, currency="ARS"),
+                bk("S13N6", "24HS", bid=109.575, ask=109.60, currency="ARS"),
+                today=date(2026, 11, 11), next_bd=date(2026, 11, 12), flows=flows)
+    opps = detect_ci_vs_24hs(v, PARAMS)
+    for direction in ("COMPRAR_CI_VENDER_24HS", "VENDER_CI_COMPRAR_24HS"):
+        o = opp(opps, "S13N6", direction)
+        assert o.coupon_status == "AJUSTE_DUDOSO" and not o.signal
+        assert any("no reflejan ese corte" in n for n in o.notes)

@@ -233,8 +233,35 @@ def parse_cashflows(raw: Dict[str, Any], after) -> Tuple[Dict[str, Any], Dict[st
     return ok, errors
 
 
+def parse_payment_history(raw: Dict[str, Any]) -> Dict[str, Tuple[str, List[Tuple[Any, float]]]]:
+    """
+    {symbol: (moneda 'USD'|'ARS', [(fecha de pago, total por 100 VN)])} con TODOS los pagos, también
+    los ya realizados (con el monto que se pagó en su momento). Sirve para corregir la historia de
+    precios por cupones y amortizaciones (ratios entre bonos con pagos distintos).
+    """
+    from datetime import date as _date
+    out: Dict[str, Tuple[str, List[Tuple[Any, float]]]] = {}
+    for r in (raw or {}).get("resultCashflowTable") or []:
+        if not isinstance(r, dict) or not r.get("symbol"):
+            continue
+        try:
+            day = _date.fromisoformat(str(r.get("paymentDate", ""))[:10])
+            total = float(r.get("ryA") or 0)
+        except (TypeError, ValueError):
+            continue
+        if total <= 0:
+            continue
+        pay_ccy = str(r.get("paymentsCurrency") or r.get("currency") or "").upper()
+        sym = str(r["symbol"]).upper()
+        out.setdefault(sym, ("ARS" if pay_ccy == "ARS" else "USD", []))[1].append((day, total))
+    for _ccy, rows in out.values():
+        rows.sort()
+    return out
+
+
 async def fetch_cashflows(cookie: str, symbols: List[str], after, base_url: str = BASE_URL,
-                          timeout: float = 40.0) -> Tuple[Dict[str, Any], Dict[str, str]]:
+                          timeout: float = 40.0,
+                          raw_sink: Optional[List[Dict[str, Any]]] = None) -> Tuple[Dict[str, Any], Dict[str, str]]:
     if not cookie:
         raise SessionExpiredError("No hay cookie de sesión de Bull Market configurada.")
     headers = dict(HEADERS, Cookie=cookie, **{"Content-Type": "application/json",
@@ -255,6 +282,8 @@ async def fetch_cashflows(cookie: str, symbols: List[str], after, base_url: str 
                 data = resp.json()
             except ValueError as e:
                 raise SessionExpiredError("Respuesta de cronogramas no es JSON: probable sesión vencida.") from e
+            if raw_sink is not None:
+                raw_sink.append(data)
             got, errs = parse_cashflows(data, after)
             ok.update(got)
             errors.update(errs)

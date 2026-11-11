@@ -113,9 +113,9 @@
                             <span class="font-bold text-white">Alertas</span>
                             <div class="flex items-center gap-3">
                                 <button onclick="testAlert()" class="text-slate-400 hover:text-white">Probar aviso</button>
-                                <button onclick="markAllRead()" class="text-emerald-400 hover:text-emerald-300">Marcar leídas</button>
                             </div>
                         </div>
+                        <div class="px-4 py-2 border-b border-brand-border text-[11px] text-slate-500">Historial de avisos: cada uno dice si sigue vigente. Las oportunidades activas están siempre en el Command Center.</div>
                         <div class="px-4 py-2 border-b border-brand-border flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
                             <label class="flex items-center gap-1.5"><input type="checkbox" id="pref-windows" onchange="savePrefs()"> Notificaciones de Windows</label>
                             <label class="flex items-center gap-1.5" title="Las detectadas con BYMA (20 min de demora) quedan solo en este panel"><input type="checkbox" id="pref-realtime" onchange="savePrefs()"> Solo confirmadas en tiempo real</label>
@@ -351,7 +351,7 @@
                             <i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i>
                             Matriz de Spread de Legislación (Bonares AL vs. Globales GD)
                         </h3>
-                        <p class="text-xs text-slate-400">Ratio = medio GD-D / medio AL-D (24hs). Rotar a NY si pasar de AL a GD cuesta ≤ 1,01 con costos; rotar a ARG si ratio ≥ 1,12 o z ≥ +1,5.</p>
+                        <p class="text-xs text-slate-400">Ratio = medio GD-D / medio AL-D (24hs). Rotar a NY si pasar de AL a GD cuesta ≤ 1,01 con costos. Además cada par tiene su <b>banda propia</b> (media de 21 ruedas ± 1,5 desvíos, con cierres de Rava): hay señal si el ratio sale de la banda, volver a la media cubre las 4 operaciones más tu ganancia mínima, y la banda fue rentable en ese par el último año. Es una señal estadística, no una ganancia asegurada.</p>
                     </div>
                 </div>
 
@@ -370,9 +370,26 @@
                 <div class="overflow-x-auto">
                     <table class="w-full text-xs font-mono whitespace-nowrap">
                         <thead class="text-slate-400 uppercase text-[10px] border-b border-brand-border">
-                            <tr><th class="px-3 py-2 text-left">Par (A / B)</th><th class="px-3 py-2">Plazo</th><th class="px-3 py-2 text-right">Ratio medio</th><th class="px-3 py-2 text-right">A→B</th><th class="px-3 py-2 text-right">B→A</th><th class="px-3 py-2 text-right">Z</th><th class="px-3 py-2 text-left">Calibración</th></tr>
+                            <tr><th class="px-3 py-2 text-left">Par (A / B)</th><th class="px-3 py-2">Plazo</th><th class="px-3 py-2 text-right">Ratio medio</th><th class="px-3 py-2 text-right">A→B</th><th class="px-3 py-2 text-right">B→A</th><th class="px-3 py-2 text-right">Z</th><th class="px-3 py-2 text-right">Banda 21r</th><th class="px-3 py-2 text-right">Media 1 año</th><th class="px-3 py-2 text-left">Estado</th></tr>
                         </thead>
                         <tbody id="curve-ratios-body" class="divide-y divide-brand-border/60"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pares de bonos casi sustitutos: CER en pesos y Tesoro en dólares -->
+            <div class="bg-brand-card border border-brand-border rounded-xl p-5 shadow-2xl space-y-3">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i data-lucide="git-compare" class="w-4 h-4 text-amber-400"></i>
+                    Pares de bonos casi sustitutos (CER en pesos · Tesoro en dólares)
+                </h3>
+                <p class="text-xs text-slate-400">Bonos CER cupón cero de vencimientos contiguos, DICP/DIP0 (mismo flujo), TX31/DICP y AO28/AO29/AN29 (especie D). Misma lectura que la tabla de arriba. Cuando el ratio sale de su banda y la banda fue rentable en ese par, se genera la señal <b>PAIR_BAND</b> (estadística, sin notificación de Windows). TX31/DICP y AO29/AN29 se corrigen por los cupones y amortizaciones de cada bono (cronograma de Bull Market, con la sesión activa); en las ruedas del corte no muestran banda.</p>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs font-mono whitespace-nowrap">
+                        <thead class="text-slate-400 uppercase text-[10px] border-b border-brand-border">
+                            <tr><th class="px-3 py-2 text-left">Par (A / B)</th><th class="px-3 py-2">Plazo</th><th class="px-3 py-2 text-right">Ratio medio</th><th class="px-3 py-2 text-right">A→B</th><th class="px-3 py-2 text-right">B→A</th><th class="px-3 py-2 text-right">Z</th><th class="px-3 py-2 text-right">Banda 21r</th><th class="px-3 py-2 text-right">Media 1 año</th><th class="px-3 py-2 text-left">Estado</th></tr>
+                        </thead>
+                        <tbody id="pair-ratios-body" class="divide-y divide-brand-border/60"></tbody>
                     </table>
                 </div>
             </div>
@@ -441,6 +458,11 @@
                 </div>
             </div>
             <div id="fx-roundtrips" class="grid gap-3 md:grid-cols-2"></div>
+            <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
+                <h3 class="text-xs font-bold text-amber-400 uppercase mb-1">Pasar dólares cable a MEP con un mismo título</h3>
+                <p class="text-[11px] text-slate-400 mb-2">Para cuando cobrás renta o amortización en cable: comprar el título en especie C y venderlo en especie D. El neto es cuántos dólares MEP de más (o de menos) quedan por cada dólar cable, con las 2 comisiones. Compará contra lo que te da el broker por convertir. Verificá en el broker si la venta en D exige esperar un día (parking). Informativo: no genera alertas.</p>
+                <table class="w-full text-xs font-mono"><thead class="text-slate-400 text-[10px] uppercase border-b border-brand-border"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Plazo</th><th class="text-right">Compro C a</th><th class="text-right">Vendo D a</th><th class="text-right">Neto</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-cable-body" class="divide-y divide-brand-border/60"></tbody></table>
+            </div>
             <div class="grid gap-4 lg:grid-cols-2">
                 <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
                     <h3 class="text-xs font-bold text-emerald-400 uppercase mb-2">Más barato para COMPRAR dólares</h3>
@@ -655,7 +677,7 @@
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="arrow-left-right" class="w-4 h-4"></i> Simulador de swaps <a class="guide-go ml-auto" data-tab="tab-swap">Abrir →</a></div>
                                 Cuántos nominales del bono B recibís vendiendo X nominales del bono A, descontando costos, y cuánta TIR ganás o perdés con la rotación.</div>
                             <div class="guide-card md:col-span-2"><div class="guide-card-h"><i data-lucide="bell" class="w-4 h-4"></i> Alertas (campanita)</div>
-                                Historial de avisos: oportunidades nuevas, confirmaciones en tiempo real, sesión de Bull Market vencida y fuentes caídas. Desde ahí elegís qué notifica Windows.</div>
+                                Historial de avisos: oportunidades nuevas, confirmaciones en tiempo real, sesión de Bull Market vencida y fuentes caídas. El número rojo cuenta solo lo que todavía no viste <b>y sigue vigente</b>; se pone en cero al abrir el panel. Cada aviso indica si la oportunidad está <i>Vigente</i> o <i>Expirada</i>: lo operable ahora está siempre en el Command Center. Las señales estadísticas (sin ganancia neta calculada) quedan en el historial pero no notifican ni suman al número. Desde ahí elegís qué notifica Windows.</div>
                         </div>
                     </section>
 
@@ -700,7 +722,7 @@
                             <div><dt class="guide-dt">Profundidad</dt><dd>Cantidad disponible en las puntas. La app recorre el libro hasta cubrir tu tamaño; si no alcanza, no hay señal.</dd></div>
                             <div><dt class="guide-dt">Desvío vs curva</dt><dd>Diferencia en puntos básicos (1 pb = 0,01%) entre la TIR del bono y la de su curva ajustada. Positivo = relativamente barato.</dd></div>
                             <div><dt class="guide-dt">Riesgo país por tramo</dt><dd>TIR de los Globales menos la de los Treasuries de EE.UU. con la misma duration.</dd></div>
-                            <div><dt class="guide-dt">Z-score</dt><dd>Cuántos desvíos estándar se aleja un ratio de su promedio histórico. Solo se usa para alertar con al menos 20 ruedas de historia propia.</dd></div>
+                            <div><dt class="guide-dt">Z-score</dt><dd>Cuántos desvíos estándar se aleja un ratio de la media de sus últimas 21 ruedas. La <b>banda</b> de cada par es esa media ± 1,5 desvíos (bandas de Bollinger), calculada con los cierres diarios de Rava.</dd></div>
                             <div><dt class="guide-dt">Ratio AL/GD</dt><dd>Precio del Global dividido el del Bonar equivalente. Mide la prima por ley NY; valores extremos sugieren rotar.</dd></div>
                         </dl>
                     </section>
@@ -723,7 +745,9 @@
                         <ul class="list-disc ml-5 space-y-1.5">
                             <li>Las cotizaciones se consultan cada minuto, <b>solo en días hábiles y en el horario de renta fija</b> (10:30 a 17:00; acciones y CEDEARs pueden seguir hasta las 18:00, pero bonos y caución cierran a las 17:00). Fuera de horario se muestra el último cierre.</li>
                             <li>La cookie de Bull Market se guarda solo en esta PC (carpeta <code>secrets/</code>) y nunca se muestra. La app no usa tu usuario ni tu contraseña.</li>
-                            <li>Las reglas estadísticas (z-score) necesitan unas 20 ruedas de uso para tener historia propia; hasta entonces se muestran como dato informativo.</li>
+                            <li>Los ratios entre bonos usan la banda propia de cada par (historia diaria de Rava, se actualiza una vez por día). Una señal de banda es estadística: gana solo si el ratio vuelve a su media, por eso no dispara notificación de Windows. En los pares donde la banda no fue rentable el último año queda como dato informativo.</li>
+                            <li>La señal <b>PAIR_BAND</b> es esa misma banda aplicada a bonos casi sustitutos: CER cupón cero de vencimientos contiguos, DICP/DIP0, TX31/DICP y AO28/AO29/AN29. Rotar entre dos CER de distinto vencimiento cambia el plazo de tu posición: no es un arbitraje sin riesgo.</li>
+                            <li>En Dólar implícito, la tabla "Pasar dólares cable a MEP" muestra con qué título conviene convertir el cable que cobrás (comprar en C, vender en D). Es informativa.</li>
                             <li>Bonos sin cronograma de pagos conocido aparecen en las tablas, pero nunca generan señales. Cerca de un pago, tampoco los que tienen el cronograma de una sola fuente sin verificar.</li>
                             <li>Las fuentes a veces omiten un pago inminente; por eso la app los busca en Bull Market y, además, descarta las brechas CI/24hs que ya existían al cierre anterior.</li>
                         </ul>
@@ -917,7 +941,7 @@
                         <td class="px-3 text-right">${pct(o.gross_pct)}</td>
                         <td class="px-3 text-right text-slate-400">-${o.fees_pct.toFixed(2)}%</td>
                         <td class="px-3 text-right text-slate-400">${o.direction === 'COMPRAR_CI_VENDER_24HS' ? '-' + o.carry_pct.toFixed(3) + '%' : '-'}</td>
-                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${o.coupon_status === 'AJUSTADO' ? o.flow_adjustment.toFixed(4) : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : (o.coupon_status === 'CORTE_PROBABLE' ? '⚠ corte' : '-'))}</td>
+                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${o.coupon_status === 'AJUSTADO' ? o.flow_adjustment.toFixed(4) : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : (o.coupon_status === 'CORTE_PROBABLE' ? '⚠ corte' : (o.coupon_status === 'AJUSTE_DUDOSO' ? '⚠ ajuste' : '-')))}</td>
                         <td class="px-3 text-right font-bold ${o.net_pct >= data.params.min_net_profit_pct ? 'text-emerald-400' : (o.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">${pct(o.net_pct)}</td>
                         <td class="px-3 text-[10px] text-slate-400 font-sans whitespace-normal min-w-[260px]">${esc(o.notes.join(' '))}</td>
                     </tr>`).join('') || '<tr><td colspan="11" class="py-8 text-center text-slate-500 font-sans">Sin datos de puntas para CI y 24hs.</td></tr>';
@@ -948,6 +972,12 @@
                     <td class="text-right ${(rate === q.buy_usd_rate ? q.buy_depth_ok : q.sell_depth_ok) ? 'text-emerald-400' : 'text-slate-500'}">${(rate === q.buy_usd_rate ? q.buy_depth_ok : q.sell_depth_ok) ? 'OK' : 'baja'}</td></tr>`;
                 document.getElementById('fx-buy-body').innerHTML = data.best_to_buy_usd.slice(0, 15).map(q => row(q, q.buy_usd_rate, true)).join('');
                 document.getElementById('fx-sell-body').innerHTML = data.best_to_sell_usd.slice(0, 15).map(q => row(q, q.sell_usd_rate)).join('');
+                document.getElementById('fx-cable-body').innerHTML = (data.cable_to_mep || []).map(c => `
+                    <tr><td class="py-1.5 text-white">${esc(c.base)}${onTag(c)}</td><td class="text-slate-400">${esc(c.cable_symbol)} → ${esc(c.mep_symbol)} · ${esc(c.settlement)}</td>
+                    <td class="text-right">${c.buy_price.toFixed(2)}</td><td class="text-right">${c.sell_price.toFixed(2)}</td>
+                    <td class="text-right font-bold ${c.net_pct > 0 ? 'text-emerald-400' : 'text-slate-500'}">${c.net_pct > 0 ? '+' : ''}${c.net_pct.toFixed(2)}%</td>
+                    <td class="text-right ${c.depth_ok ? 'text-emerald-400' : 'text-slate-500'}">${c.depth_ok ? 'OK' : 'baja'}</td></tr>`).join('')
+                    || '<tr><td colspan="6" class="py-3 text-center text-slate-500 font-sans">Sin puntas en especie C y D para el mismo título.</td></tr>';
                 document.getElementById('fx-roundtrips').innerHTML = data.round_trips.map(t => `
                     <div class="p-4 rounded-xl border ${t.signal ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-brand-border bg-brand-card'} text-xs space-y-1">
                         <div class="font-bold text-white">Ida y vuelta ${esc(t.kind)} · ${esc(t.settlement)}${t.instrument === 'ON' ? ' · <span class="text-violet-300">con ON</span>' : ''}</div>
@@ -1067,10 +1097,35 @@
             INFO: ['border-slate-500/40', 'text-slate-300', 'info'],
         };
 
-        function toggleAlerts() {
+        async function toggleAlerts() {
             const panel = document.getElementById('alerts-panel');
             panel.classList.toggle('hidden');
-            if (!panel.classList.contains('hidden')) { fetchPrefs(); fetchAlerts(); }
+            if (panel.classList.contains('hidden')) return;
+            fetchPrefs();
+            // Se muestran con la marca de "nueva" y recién después se dan por vistas
+            await fetchAlerts();
+            try {
+                await fetch('/api/v1/alerts/read', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+                document.getElementById('alerts-badge').classList.add('hidden');
+            } catch (err) { console.error('Error alertas:', err); }
+        }
+
+        function timeAgo(iso) {
+            const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+            if (mins < 1) return 'recién';
+            if (mins < 60) return `hace ${mins} min`;
+            if (mins < 1440) return `hace ${Math.round(mins / 60)} h`;
+            return `hace ${Math.round(mins / 1440)} d`;
+        }
+
+        // Etiqueta de vigencia: solo para avisos ligados a una señal
+        function alertValidity(a) {
+            if (!a.signal_status) return '';
+            if (a.signal_status === 'ACTIVE') {
+                return '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Vigente</span>';
+            }
+            const when = a.signal_last_seen ? ` ${timeAgo(a.signal_last_seen)}` : '';
+            return `<span class="px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-400 border border-slate-600/60">Expirada${when}</span>`;
         }
 
         document.addEventListener('click', e => {
@@ -1099,11 +1154,13 @@
             try {
                 const data = await (await fetch('/api/v1/alerts?limit=40')).json();
                 const badge = document.getElementById('alerts-badge');
-                badge.textContent = data.unread > 99 ? '99+' : data.unread;
-                badge.classList.toggle('hidden', !data.unread);
+                // El número cuenta solo lo sin ver que sigue vigente (no el historial)
+                const panelOpen = !document.getElementById('alerts-panel').classList.contains('hidden');
+                badge.textContent = data.pending > 99 ? '99+' : data.pending;
+                badge.classList.toggle('hidden', !data.pending || panelOpen);
                 const newest = data.alerts.length ? data.alerts[0].id : 0;
                 if (lastAlertId !== null) {
-                    data.alerts.filter(a => a.id > lastAlertId).reverse().forEach(showInPageToast);
+                    data.alerts.filter(a => a.id > lastAlertId && a.kind !== 'OBSERVACION').reverse().forEach(showInPageToast);
                     if (data.alerts.some(a => a.id > lastAlertId && (a.kind === 'OPORTUNIDAD' || a.kind === 'CONFIRMADA'))) {
                         fetchArbitrage();
                     }
@@ -1112,19 +1169,16 @@
                 const fmt = iso => new Date(iso).toLocaleString('es-AR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'});
                 document.getElementById('alerts-list').innerHTML = data.alerts.map(a => {
                     const [border, color] = ALERT_STYLE[a.severity] || ALERT_STYLE.INFO;
-                    return `<div class="px-4 py-2.5 ${a.read ? 'opacity-60' : ''} border-l-2 ${border}">
+                    const expired = a.signal_status && a.signal_status !== 'ACTIVE';
+                    const fresh = a.read ? '' : '<span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">Nueva</span>';
+                    return `<div class="px-4 py-2.5 ${expired ? 'opacity-60' : ''} border-l-2 ${border}">
                         <div class="flex justify-between gap-2"><span class="font-bold ${color}">${esc(a.title)}</span>
                         <span class="text-slate-500 font-mono whitespace-nowrap">${fmt(a.timestamp)}</span></div>
                         <div class="text-slate-400 mt-0.5">${esc(a.message || '')}</div>
-                        <div class="text-[10px] text-slate-600 mt-0.5">${a.notified ? 'Notificada en Windows' : 'Solo en el panel'}</div>
+                        <div class="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600 mt-1">${alertValidity(a)}${fresh}<span>${a.notified ? 'Notificada en Windows' : 'Solo en el panel'}</span></div>
                     </div>`;
                 }).join('') || '<div class="p-4 text-slate-500">Sin alertas.</div>';
             } catch (err) { console.error('Error alertas:', err); }
-        }
-
-        async function markAllRead() {
-            await fetch('/api/v1/alerts/read', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
-            fetchAlerts();
         }
 
         async function testAlert() {
@@ -1253,6 +1307,28 @@
             }
         }
 
+        // Bandas de los ratios entre bonos
+        function backtestText(t) {
+            if (!t) return 'Sin prueba histórica';
+            const span = t.days && t.days < 200 ? `Últimas ${t.days} ruedas` : 'Último año';
+            if (!t.signals) return `${span}: sin señales`;
+            return `${span}: ${t.wins}/${t.signals} ganaron, neto medio ${t.avg_net_pct >= 0 ? '+' : ''}${t.avg_net_pct.toFixed(2)}%`;
+        }
+        function bandOut(r) {
+            return r.band_lower !== null && r.mid_ratio !== null && (r.mid_ratio <= r.band_lower || r.mid_ratio >= r.band_upper);
+        }
+        function bandStatus(r) {
+            if (r.band_lower === null) return (r.notes || []).join(' ');
+            if (r.band_signal) {
+                const dir = r.band_signal === 'B_TO_A' ? `vender ${r.b}, comprar ${r.a}` : `vender ${r.a}, comprar ${r.b}`;
+                const net = `si vuelve a la media: ${r.expected_net_pct >= 0 ? '+' : ''}${r.expected_net_pct.toFixed(2)}% neto`;
+                return r.reliable ? `Fuera de banda: ${dir} (${net}). ${backtestText(r.backtest)}.`
+                                  : `Fuera de banda (${dir}; ${net}), pero la banda no fue confiable en este par. ${backtestText(r.backtest)}.`;
+            }
+            if (bandOut(r)) return (r.notes || []).join(' ') || 'Fuera de banda.';
+            return `Dentro de su banda. ${backtestText(r.backtest)}.`;
+        }
+
         async function fetchArbitrage() {
             try {
                 const res = await fetch('/api/v1/arbitrage/command-center');
@@ -1323,15 +1399,18 @@
                 }
 
                 // Ratios de curva
-                const crBody = document.getElementById('curve-ratios-body');
-                if (crBody && data.curve_ratios) {
+                for (const [bodyId, rows] of [['curve-ratios-body', data.curve_ratios], ['pair-ratios-body', data.pair_ratios]]) {
+                    const crBody = document.getElementById(bodyId);
+                    if (!crBody || !rows) continue;
                     const f = (v, d = 4) => (v === null || v === undefined) ? '-' : v.toFixed(d);
-                    crBody.innerHTML = data.curve_ratios.map(r => `
-                        <tr><td class="px-3 py-1.5 text-white">${esc(r.a)} / ${esc(r.b)}</td><td class="px-3 text-center text-slate-400">${esc(r.settlement)}</td>
+                    crBody.innerHTML = rows.map(r => `
+                        <tr><td class="px-3 py-1.5 text-white">${esc(r.a)} / ${esc(r.b)}${r.reliable ? ' <span class="px-1 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-sans" title="La banda fue rentable en este par en la prueba histórica">banda confiable</span>' : ''}</td><td class="px-3 text-center text-slate-400">${esc(r.settlement)}</td>
                         <td class="px-3 text-right">${f(r.mid_ratio)}</td><td class="px-3 text-right">${f(r.rotate_a_to_b)}</td>
-                        <td class="px-3 text-right">${f(r.rotate_b_to_a)}</td><td class="px-3 text-right">${r.z_score === null ? '-' : r.z_score.toFixed(2)}</td>
-                        <td class="px-3 text-slate-500 font-sans">${esc(r.calibration)}</td></tr>`).join('')
-                        || '<tr><td colspan="7" class="py-4 text-center text-slate-500">Sin puntas para estos pares.</td></tr>';
+                        <td class="px-3 text-right">${f(r.rotate_b_to_a)}</td><td class="px-3 text-right ${bandOut(r) ? 'text-amber-300 font-bold' : ''}">${r.z_score === null ? '-' : r.z_score.toFixed(2)}</td>
+                        <td class="px-3 text-right text-slate-400">${r.band_lower === null ? '-' : f(r.band_lower) + ' – ' + f(r.band_upper)}</td>
+                        <td class="px-3 text-right text-slate-400">${f(r.long_mean)}</td>
+                        <td class="px-3 text-[10px] text-slate-400 font-sans whitespace-normal min-w-[240px]">${esc(bandStatus(r))}</td></tr>`).join('')
+                        || '<tr><td colspan="9" class="py-4 text-center text-slate-500">Sin puntas para estos pares.</td></tr>';
                 }
 
                 // 3. Render Law Matrix
@@ -1360,9 +1439,13 @@
                                     <span>${m.al_ticker}: U$D ${m.price_al ? m.price_al.toFixed(2) : '-'}</span>
                                     <span>${m.gd_ticker}: U$D ${m.price_gd ? m.price_gd.toFixed(2) : '-'}</span>
                                 </div>
-                                <div class="text-[10px] text-slate-500 font-mono flex justify-between">
+                                <div class="text-[10px] text-slate-500 font-mono flex justify-between gap-2">
                                     <span>Z: ${m.z_score === null || m.z_score === undefined ? '-' : m.z_score.toFixed(2)}</span>
-                                    <span>${esc(m.calibration || '')}</span>
+                                    <span>${m.band_lower == null ? 'Sin banda' : 'Banda 21r: ' + m.band_lower.toFixed(4) + ' – ' + m.band_upper.toFixed(4)}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 font-mono flex justify-between gap-2">
+                                    <span>${m.long_mean == null ? '' : 'Media 1 año: ' + m.long_mean.toFixed(4)}</span>
+                                    <span title="Prueba con cierres diarios del último año: señales de banda en este par, cuántas ganaron y neto medio después de 4 operaciones" class="${m.reliable ? 'text-emerald-400' : ''}">${m.band_lower == null ? '' : backtestText(m.backtest)}</span>
                                 </div>
                                 <p class="text-[11px] text-slate-300 border-t border-brand-border/60 pt-1.5">${esc(m.status_description)}</p>
                             </div>

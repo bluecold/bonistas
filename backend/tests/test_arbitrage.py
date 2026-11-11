@@ -49,8 +49,8 @@ def test_law_premium_rule_a_compression():
     assert sig.leg_buy_ticker == "GD30"
     assert sig.metric_value <= Decimal("1.01")
 
-def test_law_premium_rule_b_expansion():
-    """Verifica Regla B: Ensanchamiento de ratio legal >= 1.12 dispara ROTAR_A_ARG."""
+def test_law_premium_no_fixed_threshold_for_expansion():
+    """Un ratio alto ya no dispara ROTAR_A_ARG por corte fijo: lo decide la banda de cada par."""
     quotes = {
         "AL30": BondQuoteView(
             ticker="AL30", name="Bonar 2030", bond_type="HARD_DOLLAR", law="ARG", settlement_type="24hs",
@@ -62,14 +62,7 @@ def test_law_premium_rule_b_expansion():
         )
     }
 
-    signals = ArbitrageStrategies.evaluate_law_premium(quotes)
-    assert len(signals) == 1
-    sig = signals[0]
-    assert sig.strategy_name == "LAW_PREMIUM"
-    assert sig.action_recommended == "ROTAR_A_ARG"
-    assert sig.leg_sell_ticker == "GD30"
-    assert sig.leg_buy_ticker == "AL30"
-    assert sig.metric_value >= Decimal("1.12")
+    assert ArbitrageStrategies.evaluate_law_premium(quotes) == []
 
 def test_relative_value_short_end():
     """Verifica Estrategia 2: Spread AL30 vs GD29 > 130 bps activa SWAP_DURACION."""

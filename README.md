@@ -152,6 +152,7 @@ Lista completa en [PROJECT_CONTEXT.md §7](PROJECT_CONTEXT.md).
 | [Mercados Argentina](https://mercadosargentina.com.ar/renta-fija/titulos) | Cronogramas de provinciales (verificación por consenso) | Diario |
 | [API del BCRA](https://www.bcra.gob.ar) | CER, TAMAR, A3500 | Diario |
 | [MAE Market Data](https://api.marketdata.mae.com.ar/api/mercado/feriados) | Feriados de mercado (Argentina y EE.UU.) | Diario |
+| [Rava](https://www.rava.com) | Cierres diarios históricos de los bonos con ratio: soberanos en dólares, CER cupón cero, DICP/DIP0, TX31 y AO28/AO29/AN29 (bandas de los ratios entre bonos) | Diario |
 | [DolarAPI](https://dolarapi.com) | Dólar MEP, CCL, oficial | — |
 
 Las cotizaciones se consultan una vez por minuto en horario de rueda, y solo se guarda un registro nuevo cuando el dato cambió. Las fuentes de referencia y cronogramas se consultan una vez por día, de a una página por vez y con pausas.

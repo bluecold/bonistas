@@ -50,7 +50,7 @@ class CiOpportunity:
     fees_pct: float
     carry_pct: float           # caución por los días entre liquidaciones
     flow_adjustment: float     # F por 100 VN, en la moneda de la especie
-    coupon_status: str         # SIN_PAGOS / AJUSTADO / DESCONOCIDO
+    coupon_status: str         # SIN_PAGOS / AJUSTADO / DESCONOCIDO / CORTE_PROBABLE / AJUSTE_DUDOSO
     net_pct: Optional[float]
     depth_ok: bool
     signal: bool
@@ -88,9 +88,10 @@ def detect_ci_vs_24hs(view: MarketView, params: TradingParams) -> List[CiOpportu
         ref_price = h24.mid or ci.mid
         nominal = view.nominal_for_usd(params.trade_size_usd, ref_price, ci.currency) if ref_price else None
         fx = view.implied_mep(ci.base, "CI") if ci.currency == "ARS" else None
-        flow, coupon_status = view.flow_between(ci.base, ci.currency, view.today, view.next_bd, fx)
+        flow, base_status = view.flow_between(ci.base, ci.currency, view.today, view.next_bd, fx)
 
         for direction in ("VENDER_CI_COMPRAR_24HS", "COMPRAR_CI_VENDER_24HS"):
+            coupon_status = base_status      # cada dirección parte del estado del cronograma
             if direction == "VENDER_CI_COMPRAR_24HS":
                 sell_book, sell_levels = ci, ci.bids
                 buy_book, buy_levels = h24, h24.asks
@@ -138,13 +139,20 @@ def detect_ci_vs_24hs(view: MarketView, params: TradingParams) -> List[CiOpportu
                     coupon_status = "CORTE_PROBABLE" if coupon_status == "SIN_PAGOS" else coupon_status
                     notes.insert(0, f"La brecha CI/24hs ya estaba al cierre anterior ({prev_gap:+.2f}%): "
                                     "probable corte de cupón o amortización no informado. Sin señal.")
-            if abs(gross) >= ANOMALY_GAP_PCT and coupon_status not in ("AJUSTADO",):
+            if abs(gross) >= ANOMALY_GAP_PCT and coupon_status == "AJUSTADO":
+                # El cronograma dice que hay un corte entre las dos liquidaciones, pero los precios
+                # no lo reflejan (ej. pago final al vencimiento: CI y 24hs cotizan los dos con el
+                # pago adentro). El ajuste fabrica una ganancia que no existe.
+                notes.insert(0, f"Aun descontando el pago de {flow:.4f} queda una brecha de {gross:+.1f}%: "
+                                "los precios de CI y 24hs no reflejan ese corte. Sin señal.")
+                coupon_status = "AJUSTE_DUDOSO"
+            elif abs(gross) >= ANOMALY_GAP_PCT:
                 notes.insert(0, f"Brecha de {gross:+.1f}% entre CI y 24hs: demasiado grande para un "
                                 "desarbitraje real. Verificar pagos del bono. Sin señal.")
                 if coupon_status == "SIN_PAGOS":
                     coupon_status = "CORTE_PROBABLE"
 
-            signal = depth_ok and net >= min_net and coupon_status in ("SIN_PAGOS", "AJUSTADO")
+            signal =depth_ok and net >= min_net and coupon_status in ("SIN_PAGOS", "AJUSTADO")
             out.append(CiOpportunity(
                 symbol=sym, base=ci.base, currency=ci.currency, direction=direction,
                 sell_leg=Leg(sell_book.symbol, sell_book.settlement, "VENTA", _r(sell_px),

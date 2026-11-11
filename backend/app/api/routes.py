@@ -48,6 +48,7 @@ from backend.app.services.quote_table import consolidate
 from backend.app.services.on_cashflows import OnCashflowService, OnCashflowUnavailable
 from backend.app.services.bullmarket_session import InvalidCookieError
 from backend.app.services.alert_service import AlertService, get_prefs, update_prefs
+from backend.app.services.price_history_service import PriceHistoryService
 from backend.app.services.trading_settings import get_params, update_params
 from backend.app.config import settings
 
@@ -58,6 +59,7 @@ bullmarket_session = market_book_service.bm_session
 on_cashflow_service = OnCashflowService(bullmarket_session)
 arbitrage_engine = ArbitrageEngine(ingestion_service, book_service=market_book_service)
 alert_service = AlertService()
+price_history_service = PriceHistoryService()
 arbitrage_engine.listeners.append(alert_service.on_evaluation)
 
 
@@ -574,8 +576,7 @@ def get_law_spreads(
         if spread["price_ratio"]:
             if spread["price_ratio"] <= 1.01:
                 status = "COMPRESSED_ROTAR_A_NY"
-            elif spread["price_ratio"] >= 1.12:
-                status = "EXPANDED_ROTAR_A_ARG"
+            # La prima alta se evalúa con la banda propia de cada par (Command Center), no con un corte fijo
 
         results.append(
             LawSpreadPair(
@@ -746,6 +747,8 @@ def get_fx_implied(
         "best_to_buy_usd": [q.to_dict() for q in buys[:30]],
         "best_to_sell_usd": [q.to_dict() for q in sells[:30]],
         "round_trips": [t.to_dict() for t in scan.fx_round_trips if t.kind == k],
+        "cable_to_mep": [c.to_dict() for c in
+                         sorted(scan.cable_to_mep, key=lambda c: (not c.depth_ok, -c.net_pct))[:10]],
     }
 
 
@@ -823,14 +826,19 @@ def get_alerts(
     after_id: Optional[int] = Query(None, description="Solo alertas posteriores a este id"),
     db: Session = Depends(get_db),
 ):
-    """Historial de alertas (más nuevas primero) y cantidad sin leer."""
+    """
+    Historial de alertas (más nuevas primero), cada una con la vigencia de su señal.
+    `pending` es el número de la campanita: sin leer y todavía vigentes. `unread`: todas las sin leer.
+    """
     alerts = AlertService.list_alerts(db, limit=limit, unread_only=unread_only, after_id=after_id)
-    return {"unread": AlertService.unread_count(db), "alerts": [AlertService.to_dict(a) for a in alerts]}
+    return {"unread": AlertService.unread_count(db), "pending": AlertService.pending_count(db),
+            "alerts": AlertService.describe(db, alerts)}
 
 
 @router.post("/alerts/read", tags=["Alertas"])
 def mark_alerts_read(req: MarkReadRequest, db: Session = Depends(get_db)):
-    return {"marked": AlertService.mark_read(db, req.ids), "unread": AlertService.unread_count(db)}
+    return {"marked": AlertService.mark_read(db, req.ids), "unread": AlertService.unread_count(db),
+            "pending": AlertService.pending_count(db)}
 
 
 @router.post("/alerts/test", tags=["Alertas"])

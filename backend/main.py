@@ -22,6 +22,7 @@ from backend.app.api.routes import (
     arbitrage_engine,
     market_book_service,
     reference_service,
+    price_history_service,
     market_calendar,
     check_source_alerts,
 )
@@ -102,8 +103,18 @@ async def scheduled_ingestion_job():
         db.close()
 
 
+async def refresh_price_history(db) -> None:
+    """Una vez por día: cierres históricos de Rava para las bandas de los ratios entre bonos."""
+    try:
+        if price_history_service.is_stale(db):
+            logger.info(f"Historia de cierres (Rava): {await price_history_service.refresh(db)}")
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Historia de cierres (Rava): {e}")
+
+
 async def scheduled_reference_job():
-    """Una vez por día: flujos de CompararBonos y CER/TAMAR/A3500 del BCRA."""
+    """Una vez por día: flujos de CompararBonos, CER/TAMAR/A3500 del BCRA y cierres de Rava."""
     db = SessionLocal()
     try:
         result = await reference_service.refresh(db)
@@ -111,6 +122,7 @@ async def scheduled_reference_job():
     except Exception as e:
         logger.error(f"Error en la actualización de referencia: {e}")
     finally:
+        await refresh_price_history(db)
         db.close()
 
 
@@ -160,6 +172,7 @@ async def lifespan(app: FastAPI):
                 if reference_is_stale(db):
                     logger.info("Actualizando datos de referencia (CompararBonos + BCRA)...")
                     await reference_service.refresh(db)
+                await refresh_price_history(db)
                 logger.info("Ejecutando ingesta inicial de mercado...")
                 await run_market_cycle(db)
             except Exception as e:

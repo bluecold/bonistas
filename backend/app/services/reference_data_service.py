@@ -215,7 +215,29 @@ class ReferenceDataService:
         db.commit()
         return added
 
-    async def apply_bullmarket_cashflows(self, db: Session, cookie: str) -> Dict[str, Any]:
+    @staticmethod
+    def store_payment_history(db: Session, history: Dict[str, Any]) -> int:
+        """
+        Guarda en `bond_flow_log` todos los pagos (pasados y futuros) de los bonos cuyos ratios se
+        corrigen por cupón. Reemplaza los de cada bono recibido. `history`: salida de
+        `bullmarket_client.parse_payment_history`.
+        """
+        from backend.app.arbitrage.ratios import flow_adjusted_bases
+        from backend.app.db.models import BondFlowLog
+        saved = 0
+        for base in flow_adjusted_bases():
+            if base not in history:
+                continue
+            currency, rows = history[base]
+            db.execute(delete(BondFlowLog).where(BondFlowLog.ticker_base == base))
+            by_day = {day: total for day, total in rows}
+            db.add_all([BondFlowLog(ticker_base=base, pay_date=day, amount=total, currency=currency,
+                                    source="BULLMARKET") for day, total in by_day.items()])
+            saved += len(by_day)
+        db.commit()
+        return saved
+
+    async def apply_bullmarket_cashflows(self, db: Session, cookie: str, today: Optional[date] = None) -> Dict[str, Any]:
         """
         Con la sesión de Bull Market activa (una vez por día): cronogramas de todos los bonos de la
         referencia y de los provinciales. Suma Bull Market al consenso de provinciales y agrega
@@ -224,11 +246,18 @@ class ReferenceDataService:
         from backend.app.data import bullmarket_client as bmc
         from backend.app.data.bruno618_client import PROVINCIAL_TICKERS as BRUNO_TICKERS
         from backend.app.data.mercados_argentina_client import PROVINCIAL_TICKERS as MA_TICKERS
-        today = date.today()
+        today = today or date.today()
         symbols = [r.ticker_base for r in db.execute(select(ReferenceBond)).scalars()]
         provincial = list(dict.fromkeys([*BRUNO_TICKERS, *MA_TICKERS]))
-        schedules, errors = await bmc.fetch_cashflows(cookie, symbols + provincial, after=today)
+        from backend.app.arbitrage.ratios import flow_adjusted_bases
+        raws: List[Dict[str, Any]] = []
+        schedules, errors = await bmc.fetch_cashflows(
+            cookie, symbols + provincial + flow_adjusted_bases(), after=today, raw_sink=raws)
         source_health.success("BULLMARKET_CRONOGRAMAS", schedules=len(schedules), errors=len(errors))
+        history: Dict[str, Any] = {}
+        for raw in raws:
+            history.update(bmc.parse_payment_history(raw))
+        self.store_payment_history(db, history)
         if self._secondary_day != today or not any(k in self._secondary for k in ("BRUNO618", "MERCADOSARG")):
             sec: Dict[str, Dict[str, ProvincialSchedule]] = {}
             for name, fetch in (("BRUNO618", lambda: self.bruno.fetch_schedules()),

@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.arbitrage.ci_24hs import CiOpportunity, detect_ci_vs_24hs
 from backend.app.arbitrage.fx_implied import (
-    FxRoundTrip, annotate_vs_reference, best_on_round_trips, best_round_trips, implied_fx_quotes,
+    CableToMep, FxRoundTrip, annotate_vs_reference, best_on_round_trips, best_round_trips,
+    cable_to_mep_quotes, implied_fx_quotes,
 )
 from backend.app.arbitrage.market_view import MarketView, build_market_view
 from backend.app.config import settings
@@ -43,12 +44,12 @@ from backend.app.services.trading_settings import TradingParams, get_params
 logger = logging.getLogger(__name__)
 
 LAW_ROTATE_TO_NY_MAX_RATIO = 1.01   # prima NY <= 1%: cobertura legal "gratis"
-LAW_ROTATE_TO_ARG_MIN_RATIO = 1.12
-LAW_ROTATE_TO_ARG_MIN_Z = 1.5
+# La rotación por prima alta/baja ya no usa un corte fijo común: cada par tiene su banda (ratios.py)
 
 # TIEMPO_REAL: todas las patas con puntas de Bull Market. PARCIAL: alguna pata con BYMA (demora).
 CONFIRMATION_BY_SOURCE = {"BYMA": "DEMORA_20MIN", "BULLMARKET": "TIEMPO_REAL", "MIXTO": "PARCIAL"}
 ON_SOURCE = "BULLMARKET_ON"
+PAIR_BAND_KINDS = ("CER", "TESORO_USD")   # pares que dan señal PAIR_BAND (los de curva son informativos)
 
 
 @dataclass
@@ -59,6 +60,7 @@ class ScanResult:
     fx_quotes: list = field(default_factory=list)
     fx_round_trips: List[FxRoundTrip] = field(default_factory=list)
     ratios: List[PairRatio] = field(default_factory=list)
+    cable_to_mep: List[CableToMep] = field(default_factory=list)
     on_view: Optional[MarketView] = None     # libros de ON (Bull Market), aparte de los bonos
 
 
@@ -93,6 +95,7 @@ class ArbitrageEngine:
         result.ci_24hs = detect_ci_vs_24hs(view, params)
         result.fx_quotes = implied_fx_quotes(view, params)
         result.fx_round_trips = best_round_trips(result.fx_quotes, params)
+        result.cable_to_mep = cable_to_mep_quotes(view, params)
         if settings.BULLMARKET_ON_ENABLED:
             # Las ON van en una vista propia: solo participan del dólar implícito y del valor
             # relativo, nunca del CI vs 24hs ni de los ratios de bonos.
@@ -100,6 +103,7 @@ class ArbitrageEngine:
                 db, sources=(ON_SOURCE,), now=now, book_service=self.book_service,
                 live_max_age={ON_SOURCE: settings.BULLMARKET_MAX_AGE_SECONDS},
             )
+            result.cable_to_mep += cable_to_mep_quotes(result.on_view, params, instrument="ON")
             on_quotes = implied_fx_quotes(result.on_view, params, instrument="ON")
             if on_quotes:
                 result.fx_quotes += on_quotes
@@ -181,16 +185,63 @@ class ArbitrageEngine:
                            f"(costos incluidos). Cobertura legal casi sin costo. " + " ".join(r.notes)),
                     **common,
                 ))
-            elif r.mid_ratio >= LAW_ROTATE_TO_ARG_MIN_RATIO or (
-                    r.calibration.startswith("HISTORICA") and r.z_score is not None
-                    and r.z_score >= LAW_ROTATE_TO_ARG_MIN_Z):
-                out.append(ArbitrageSignalCreate(
-                    leg_sell_ticker=f"{gd}D", leg_buy_ticker=f"{al}D", action_recommended="ROTAR_A_ARG",
-                    notes=(f"Prima Ley NY anormalmente alta: ratio {r.mid_ratio:.4f} (z {r.z_score:+.2f}, "
-                           f"{r.calibration}). Rotar {gd}D -> {al}D da {r.rotate_b_to_a:.4f} nominales por "
-                           f"nominal. " + " ".join(r.notes)),
-                    **common,
-                ))
+            elif r.band_signal and r.reliable:
+                # Fuera de la banda propia del par, con ganancia esperada que cubre las 4 operaciones
+                # y en un par donde la banda fue rentable el último año. Es una señal estadística:
+                # la ganancia depende de que el ratio vuelva a su media (no lleva net_profit_pct).
+                t = r.backtest or {}
+                context = (f"Banda de {r.calibration.split('_')[-1]}: {r.band_lower:.4f} a {r.band_upper:.4f} "
+                           f"(media {r.hist_mean:.4f}; media de un año {r.long_mean:.4f}). Si el ratio vuelve "
+                           f"a la media: {r.expected_net_pct:+.2f}% de nominales, neto de las 4 operaciones. "
+                           f"En el último año la banda dio {t.get('signals')} señales en este par, "
+                           f"{t.get('wins')} con ganancia (neto medio {t.get('avg_net_pct'):+.2f}%, "
+                           f"peor {t.get('worst_pct'):+.2f}%). No es ganancia asegurada.")
+                if r.band_signal == "B_TO_A":
+                    out.append(ArbitrageSignalCreate(
+                        leg_sell_ticker=f"{gd}D", leg_buy_ticker=f"{al}D", action_recommended="ROTAR_A_ARG",
+                        notes=(f"Prima Ley NY sobre su banda: ratio {r.mid_ratio:.4f} (z {r.z_score:+.2f}). "
+                               f"Rotar {gd}D -> {al}D da {r.rotate_b_to_a:.4f} nominales por nominal. " + context),
+                        **common,
+                    ))
+                else:
+                    out.append(ArbitrageSignalCreate(
+                        leg_sell_ticker=f"{al}D", leg_buy_ticker=f"{gd}D", action_recommended="ROTAR_A_NY",
+                        notes=(f"Prima Ley NY bajo su banda: ratio {r.mid_ratio:.4f} (z {r.z_score:+.2f}). "
+                               f"Rotar {al}D -> {gd}D da {r.rotate_a_to_b:.4f} nominales por nominal. " + context),
+                        **common,
+                    ))
+        return out
+
+    @staticmethod
+    def _signals_from_pair_bands(ratios: List[PairRatio]) -> List[ArbitrageSignalCreate]:
+        """
+        Pares de bonos casi sustitutos (CER en pesos, Tesoro en dólares): señal cuando el ratio sale
+        de su banda, volver a la media cubre las 4 operaciones y la banda fue rentable en ese par.
+        Estadística, igual que la de AL/GD: no lleva net_profit_pct.
+        """
+        out = []
+        for r in ratios:
+            if r.kind not in PAIR_BAND_KINDS or r.settlement != "24HS" or not (r.band_signal and r.reliable):
+                continue
+            t = r.backtest or {}
+            sell, buy, got = ((r.symbol_b, r.symbol_a, r.rotate_b_to_a) if r.band_signal == "B_TO_A"
+                              else (r.symbol_a, r.symbol_b, r.rotate_a_to_b))
+            side = "sobre" if r.band_signal == "B_TO_A" else "bajo"
+            out.append(ArbitrageSignalCreate(
+                strategy_name="PAIR_BAND", metric_name="RATIO_B_A",
+                metric_value=Decimal(str(r.mid_ratio)),
+                historical_mean=Decimal(str(r.hist_mean)) if r.hist_mean else None,
+                std_deviations=Decimal(str(r.z_score)) if r.z_score is not None else None,
+                confirmation=CONFIRMATION_BY_SOURCE.get(r.source, r.source), details=r.to_dict(),
+                leg_sell_ticker=sell, leg_buy_ticker=buy, action_recommended=f"ROTAR_A_{buy}",
+                notes=(f"Ratio {r.symbol_b}/{r.symbol_a} {side} su banda: {r.mid_ratio:.4f} (z {r.z_score:+.2f}; "
+                       f"banda {r.band_lower:.4f} a {r.band_upper:.4f}, media {r.hist_mean:.4f}). "
+                       f"Rotar {sell} -> {buy} da {got:.4f} nominales por nominal. Si el ratio vuelve a la "
+                       f"media: {r.expected_net_pct:+.2f}% de nominales, neto de las 4 operaciones. En la "
+                       f"historia disponible la banda dio {t.get('signals')} señales en este par, "
+                       f"{t.get('wins')} con ganancia (neto medio {t.get('avg_net_pct'):+.2f}%, "
+                       f"peor {t.get('worst_pct'):+.2f}%). No es ganancia asegurada."),
+            ))
         return out
 
     # ------------------------------------------------------------------ evaluación completa
@@ -205,6 +256,7 @@ class ArbitrageEngine:
         generated += self._signals_from_ci(scan.ci_24hs)
         generated += self._signals_from_fx(scan.fx_round_trips)
         generated += self._signals_from_law_ratios(scan.ratios)
+        generated += self._signals_from_pair_bands(scan.ratios)
 
         # Pares AL/GD sin puntas de BYMA: se evalúan con la analítica de Bonistas (precio MEP)
         pairs_with_books = {(r.a, r.b) for r in scan.ratios if r.kind == "LEY"}
@@ -324,12 +376,26 @@ class ArbitrageEngine:
             light, desc = "NEUTRAL", "Sin desvío significativo"
             if cost_to_ny is not None and cost_to_ny <= LAW_ROTATE_TO_NY_MAX_RATIO:
                 light, desc = "GREEN", f"Prima NY comprimida ({r.mid_ratio:.3f}): rotar a NY."
-            elif r.mid_ratio and (r.mid_ratio >= LAW_ROTATE_TO_ARG_MIN_RATIO or (
-                    r.calibration.startswith("HISTORICA") and (r.z_score or 0) >= LAW_ROTATE_TO_ARG_MIN_Z)):
-                light, desc = "GREEN", f"Prima NY inflada ({r.mid_ratio:.3f}, z {r.z_score:+.2f}): rotar a ARG."
-            elif r.calibration.startswith("HISTORICA") and r.z_score is not None and abs(r.z_score) >= 1.0:
-                light, desc = "YELLOW", f"En observación: z {r.z_score:+.2f} ({r.calibration})."
+            elif r.band_signal and r.reliable:
+                where = ("sobre su banda: rotar a ARG" if r.band_signal == "B_TO_A"
+                         else "bajo su banda: rotar a NY")
+                light, desc = "GREEN", (f"Prima NY {where}. Si vuelve a la media: "
+                                        f"{r.expected_net_pct:+.2f}% neto (no asegurado).")
+            elif r.band_signal:
+                light, desc = "YELLOW", ("Fuera de banda, pero en este par la banda no fue confiable el "
+                                         "último año: informativo.")
+            elif r.band_upper is not None and r.mid_ratio and not (r.band_lower < r.mid_ratio < r.band_upper):
+                light, desc = "YELLOW", (f"Fuera de banda (z {r.z_score:+.2f}), pero volver a la media dejaría "
+                                         f"{r.expected_net_pct:+.2f}% neto: no cubre el mínimo."
+                                         if r.expected_net_pct is not None else f"Fuera de banda (z {r.z_score:+.2f}).")
+            elif r.band_upper is None:
+                desc = "Sin banda: falta historia del par."
+            else:
+                desc = "Dentro de su banda."
             law_pairs_matrix.append({
+                "band_lower": r.band_lower, "band_upper": r.band_upper, "band_mean": r.hist_mean,
+                "long_mean": r.long_mean, "backtest": r.backtest, "reliable": r.reliable,
+                "history_source": r.history_source,
                 "al_ticker": r.a, "gd_ticker": r.b,
                 "price_al": r.price_a[1] if r.price_a else None,   # vendedora (para comprar)
                 "price_gd": r.price_b[1] if r.price_b else None,
@@ -403,6 +469,7 @@ class ArbitrageEngine:
             ],
             "law_premium_matrix": law_pairs_matrix,
             "curve_ratios": [r.to_dict() for r in scan.ratios if r.kind == "CURVA"],
+            "pair_ratios": [r.to_dict() for r in scan.ratios if r.kind in PAIR_BAND_KINDS],
             "relative_value_tramo_corto": {
                 "pair": "GD29 vs AL30",
                 "spread_bps": rv_spread_bps,

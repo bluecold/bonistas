@@ -117,7 +117,8 @@ async def test_apply_bullmarket_cashflows_adds_ndg34(db):
                          flows=[["2027-05-10", 399.21]], flows_source="COMPARARBONOS"))
     db.commit()
     svc = ReferenceDataService()
-    res = await svc.apply_bullmarket_cashflows(db, TEST_BM_COOKIE)
+    sim_today = date(2026, 11, 5)
+    res = await svc.apply_bullmarket_cashflows(db, TEST_BM_COOKIE, today=sim_today)
     ndg = db.get(ReferenceBond, "NDG34")
     assert ndg is not None and ndg.flows_source == "BULLMARKET" and ndg.species == ["NDG34", "NDG4D", "NDG4C"]
-    assert "TX28" in res["imminent"] and svc.bullmarket_cashflows_day == date.today()
+    assert "TX28" in res["imminent"] and svc.bullmarket_cashflows_day == sim_today

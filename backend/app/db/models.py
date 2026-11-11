@@ -223,6 +223,36 @@ class Alert(Base):
     read = Column(Boolean, default=False)
 
 
+class DailyClose(Base):
+    """
+    Cierre diario histórico por especie (fuente Rava), para las bandas de los ratios entre bonos.
+    Se reemplaza entero por especie en cada actualización diaria.
+    """
+    __tablename__ = "daily_closes"
+
+    symbol = Column(String(20), primary_key=True)     # especie, ej. AL30D
+    day = Column(Date, primary_key=True)
+    close = Column(Float, nullable=False)
+    source = Column(String(20), nullable=False, default="RAVA")
+    fetched_at = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc))
+
+
+class BondFlowLog(Base):
+    """
+    Pagos (renta + amortización, por 100 VN) de los bonos cuyos ratios se ajustan por cupón:
+    todos, pasados y futuros, según el cronograma de Bull Market (se reemplazan una vez por día
+    con la sesión activa). Sirven para descontarlos de la historia de precios (un cupón o una
+    amortización bajan el precio sin que haya oportunidad).
+    """
+    __tablename__ = "bond_flow_log"
+
+    ticker_base = Column(String(20), primary_key=True)
+    pay_date = Column(Date, primary_key=True)
+    amount = Column(Float, nullable=False)
+    currency = Column(String(10), nullable=False)      # 'USD' | 'ARS'
+    source = Column(String(20), nullable=False, default="BULLMARKET")
+
+
 class MarketHoliday(Base):
     """Feriados de mercado (fuente MAE). AR: sin rueda ni liquidación. US: poco volumen externo."""
     __tablename__ = "market_holidays"
