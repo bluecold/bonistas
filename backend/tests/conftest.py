@@ -179,6 +179,18 @@ def _install_offline_sources(monkeypatch):
 
     monkeypatch.setattr(MaeClient, "fetch_raw", fake_mae)
 
+    # --- Ficha del bono: sin historia de Rava ni serie del CER salvo que el test las cargue
+    from backend.app.data.rava_client import RavaClient
+
+    async def fake_rava_text(self, symbol):
+        return ""
+
+    async def fake_bcra_series(self, name, since, until):
+        return []
+
+    monkeypatch.setattr(RavaClient, "fetch_text", fake_rava_text)
+    monkeypatch.setattr(BcraClient, "fetch_series", fake_bcra_series)
+
     # Red de seguridad: aunque algún test construya un WindowsToastNotifier, no lanza PowerShell
     from backend.app.services.notifier import WindowsToastNotifier
     monkeypatch.setattr(WindowsToastNotifier, "send", lambda self, title, message, url=None: False)

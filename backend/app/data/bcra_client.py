@@ -10,7 +10,7 @@ Variables usadas:
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 
@@ -61,3 +61,18 @@ class BcraClient:
                 except Exception as e:
                     logger.warning(f"BCRA: no se pudo obtener {name} (id {var_id}): {e}")
         return out
+
+    async def fetch_series(self, name: str, since: date, until: date) -> List[Tuple[date, float]]:
+        """Serie diaria de una variable entre dos fechas, en orden cronológico (hasta 3000 datos)."""
+        async with httpx.AsyncClient(timeout=self.timeout, headers=HEADERS) as client:
+            res = await client.get(URL.format(id=VARIABLES[name]), params={
+                "desde": since.isoformat(), "hasta": until.isoformat(), "limit": 3000})
+        res.raise_for_status()
+        results = res.json().get("results") or []
+        out: Dict[date, float] = {}
+        for item in (results[0].get("detalle") if results else []) or []:
+            try:
+                out[date.fromisoformat(item["fecha"])] = float(item["valor"])
+            except (KeyError, TypeError, ValueError):
+                continue
+        return sorted(out.items())

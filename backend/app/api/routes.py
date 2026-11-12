@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import date
 
 from backend.app.db.session import get_db
-from backend.app.db.models import Bond, MacroIndicator, PriceSnapshot, ArbitrageSignal
+from backend.app.db.models import Bond, BookQuote, MacroIndicator, PriceSnapshot, ArbitrageSignal
 from backend.app.schemas.bond import BondResponse
 from backend.app.schemas.snapshot import BondQuoteView
 from backend.app.schemas.valuation import (
@@ -49,6 +49,9 @@ from backend.app.services.on_cashflows import OnCashflowService, OnCashflowUnava
 from backend.app.services.bullmarket_session import InvalidCookieError
 from backend.app.services.alert_service import AlertService, get_prefs, update_prefs
 from backend.app.services.price_history_service import PriceHistoryService
+from backend.app.services import bond_profile_service as profile
+from backend.app.services import swap_pricing
+from backend.app.services.quote_table import live_price
 from backend.app.services.trading_settings import get_params, update_params
 from backend.app.config import settings
 
@@ -425,6 +428,122 @@ async def get_bond_cashflows(
     ]
 
 
+# ==========================================
+# FICHA DEL BONO
+# ==========================================
+
+async def _profile_model(db: Session, ticker: str, today: date) -> profile.BondModel:
+    bond = _find_bond(db, ticker)
+    if bond is None and ReferenceDataService.get_reference(db, ticker) is None:
+        raise HTTPException(status_code=404, detail=f"Bono '{ticker}' no encontrado.")
+    on_schedule = None
+    if bond is not None and bond.bond_type == "ON":
+        try:
+            on_schedule = await on_cashflow_service.get(bond.ticker)
+        except OnCashflowUnavailable:
+            on_schedule = None
+    return profile.build_model(db, ticker, today, on_schedule=on_schedule)
+
+
+def _profile_price(db: Session, model: profile.BondModel) -> Dict[str, Any]:
+    """Precio actual de la especie de la ficha: Bull Market si está vigente, si no bonistas.com."""
+    symbol = model.price_symbol
+    out: Dict[str, Any] = {"symbol": symbol, "price": None, "source": None, "kind": None, "time": None,
+                           "bid": None, "ask": None, "prev_close": None, "change_pct": None}
+    for source in (market_book_service.BULLMARKET, market_book_service.BULLMARKET_ON):
+        keys = market_book_service.live_keys(source, max_age_seconds=settings.BULLMARKET_MAX_AGE_SECONDS)
+        if not keys or (symbol, "24HS") not in keys:
+            continue
+        book = next((b for b in market_book_service.latest_books(db, source=source, settlement="24HS")
+                     if b.symbol == symbol), None)
+        price, kind = live_price(book) if book is not None else (None, None)
+        if price:
+            out.update(price=price, source="BULLMARKET", kind=kind, time=book.trade_time,
+                       bid=book.bid, ask=book.ask, prev_close=book.prev_close)
+            break
+    usd = model.flow_currency == "USD"
+    if out["price"] is None:
+        for t in dict.fromkeys((symbol, model.base)):
+            snap = _latest_snapshot(db, t)
+            if snap is None:
+                continue
+            value = (snap.price_mep if usd else snap.price_ars) or (snap.last_price if t == symbol else None)
+            if value:
+                out.update(price=float(value), source="BONISTAS", time=snap.timestamp.isoformat())
+                break
+    if out["prev_close"] is None:
+        book = db.execute(
+            select(BookQuote).where(BookQuote.symbol == symbol, BookQuote.settlement == "24HS",
+                                    BookQuote.prev_close.is_not(None))
+            .order_by(BookQuote.id.desc())).scalars().first()
+        if book is not None:
+            out["prev_close"] = book.prev_close
+    if out["price"] and out["prev_close"]:
+        out["change_pct"] = round((out["price"] / out["prev_close"] - 1.0) * 100.0, 2)
+    return out
+
+
+def _profile_reference_metrics(db: Session, model: profile.BondModel) -> Dict[str, Any]:
+    """Métricas de bonistas.com de la misma especie, para lo que no se puede calcular con flujos propios."""
+    for t in dict.fromkeys((model.price_symbol, model.base)):
+        snap = _latest_snapshot(db, t)
+        if snap is not None and snap.ytm_percentage is not None:
+            f = lambda v: float(v) if v is not None else None
+            return {"ytm_pct": f(snap.ytm_percentage), "modified_duration": f(snap.modified_duration),
+                    "technical_value": f(snap.technical_value), "parity_pct": f(snap.parity_percentage),
+                    "tem_pct": f(snap.tem_percentage)}
+    return {}
+
+
+async def _profile_cer(db: Session, model: profile.BondModel) -> Optional[profile.CerSeries]:
+    return profile.CerSeries(await price_history_service.ensure_cer(db)) if model.cer else None
+
+
+@router.get("/bonds/{ticker}/profile", tags=["Quant Analytics"])
+async def get_bond_profile(ticker: str, db: Session = Depends(get_db)):
+    """
+    Ficha del bono: datos de contexto, precio actual, métricas calculadas con los flujos propios
+    (TIR, duration, valor técnico, paridad) y sensibilidad del precio a cambios de TIR.
+    """
+    today = date.today()
+    model = await _profile_model(db, ticker, today)
+    price = _profile_price(db, model)
+    cer = await _profile_cer(db, model)
+    s_date = next_business_day(today)
+    metrics = profile.valuation(model, price["price"], s_date, cer)
+    metrics["settlement_date"] = s_date.isoformat()
+    return {"context": profile.context(model, today), "quote": price, "metrics": metrics,
+            "reference_metrics": _profile_reference_metrics(db, model)}
+
+
+@router.get("/bonds/{ticker}/history", tags=["Quant Analytics"])
+async def get_bond_history(ticker: str, db: Session = Depends(get_db)):
+    """
+    Historia diaria de la ficha: precio de cierre (Rava, se descarga a demanda una vez por día),
+    TIR y paridad recalculadas con los flujos de cada fecha, pagos para marcar en los gráficos y
+    ratio contra los pares del bono con su banda móvil.
+    """
+    today = date.today()
+    model = await _profile_model(db, ticker, today)
+    pairs = [sp for sp in profile.pair_specs() if model.base in (sp.a, sp.b)]
+    symbols = [model.price_symbol] + [x for sp in pairs for x in (sp.symbol_a, sp.symbol_b)]
+    errors = await price_history_service.ensure(db, symbols)
+    closes = PriceHistoryService.closes(db, model.price_symbol)
+    cer = await _profile_cer(db, model)
+    notes = list(model.notes)
+    if model.cer and not cer:
+        notes.append("No se pudo obtener la serie del CER (BCRA): sin TIR ni paridad históricas.")
+    if not closes:
+        detail = errors.get(model.price_symbol, "sin datos")
+        notes.append(f"Rava no tiene historia de {model.price_symbol} ({detail}).")
+    history = profile.compute_history(model, closes, today, cer)
+    history["payments"] = profile.payment_marks(model, closes[0][0] if closes else None, today)
+    history["pairs"] = profile.pair_series(db, model.base, today)
+    history["source"] = "RAVA"
+    history["notes"] = notes
+    return history
+
+
 @router.post("/calculator/valuation", response_model=ValuationResponse, tags=["Quant Analytics"])
 def calculate_bond_valuation(
     request: ValuationRequest,
@@ -604,7 +723,11 @@ def simulate_swap_endpoint(
     request: SwapRequest,
     db: Session = Depends(get_db)
 ):
-    """Simula una rotación o swap de bonos calculando nominales resultantes, comisiones e impacto en cartera."""
+    """
+    Simula una rotación entre dos bonos: nominales resultantes, costos e impacto en TIR y duration.
+    Usa precios ejecutables: se vende a la punta compradora y se compra a la vendedora, recorriendo
+    el libro (Bull Market en tiempo real o BYMA con demora). Sin libro, el último operado.
+    """
     sell_t = request.sell_ticker.strip().upper()
     buy_t = request.buy_ticker.strip().upper()
     settlement = request.settlement.upper()
@@ -634,12 +757,24 @@ def simulate_swap_endpoint(
     md_sell = float(snap_sell.modified_duration) if snap_sell.modified_duration else None
     md_buy = float(snap_buy.modified_duration) if snap_buy.modified_duration else None
 
+    # Precios ejecutables: puntas con profundidad; el último operado queda como respaldo
+    fee_rate = (request.broker_commission_pct + request.byma_fee_pct) / 100.0
+    max_age = settings.BULLMARKET_MAX_AGE_SECONDS
+    leg_s = swap_pricing.sell_leg(
+        swap_pricing.book_for_leg(db, market_book_service, sell_t, currency, settlement, max_age),
+        request.sell_nominal, p_sell, sell_t)
+    cash = (request.sell_nominal / 100.0) * leg_s.price * (1.0 - fee_rate)
+    leg_b = swap_pricing.buy_leg(
+        swap_pricing.book_for_leg(db, market_book_service, buy_t, currency, settlement, max_age),
+        cash, fee_rate, p_buy, buy_t)
+    notes = [n for n in (swap_pricing.describe(leg_s, "venta"), swap_pricing.describe(leg_b, "compra")) if n]
+
     res = simulate_bond_swap(
-        sell_ticker=sell_t,
-        sell_price=p_sell,
+        sell_ticker=leg_s.symbol,
+        sell_price=leg_s.price,
         sell_nominal=request.sell_nominal,
-        buy_ticker=buy_t,
-        buy_price=p_buy,
+        buy_ticker=leg_b.symbol,
+        buy_price=leg_b.price,
         broker_commission_pct=request.broker_commission_pct,
         byma_fee_pct=request.byma_fee_pct,
         ytm_sell=ytm_sell,
@@ -649,13 +784,13 @@ def simulate_swap_endpoint(
     )
 
     return SwapResponse(
-        sell_ticker=res.sell_ticker,
+        sell_ticker=sell_t,
         sell_nominal=res.sell_nominal,
         sell_price=res.sell_price,
         sell_gross_amount=res.sell_gross_amount,
         sell_fees=res.sell_fees,
         sell_net_proceeds=res.sell_net_proceeds,
-        buy_ticker=res.buy_ticker,
+        buy_ticker=buy_t,
         buy_nominal_acquired=res.buy_nominal_acquired,
         buy_price=res.buy_price,
         buy_net_cost=res.buy_net_cost,
@@ -667,7 +802,12 @@ def simulate_swap_endpoint(
         duration_change=res.duration_change,
         summary_message=res.summary_message,
         currency=currency,
-        settlement=settlement
+        settlement=settlement,
+        sell_symbol=leg_s.symbol, buy_symbol=leg_b.symbol,
+        sell_price_kind=leg_s.kind, buy_price_kind=leg_b.kind,
+        sell_price_source=leg_s.source, buy_price_source=leg_b.source,
+        sell_depth_ok=leg_s.depth_ok, buy_depth_ok=leg_b.depth_ok,
+        notes=notes,
     )
 
 @router.get("/arbitrage/signals", response_model=List[ArbitrageSignalResponse], tags=["Arbitrage Engine"])

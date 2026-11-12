@@ -84,10 +84,16 @@ def simulate_bond_swap(
     if md_buy is not None and md_sell is not None:
         duration_change = round(md_buy - md_sell, 3)
 
+    def es(v: float, d: int = 0) -> str:
+        """Número en formato argentino (miles con punto, decimales con coma)."""
+        return f"{v:,.{d}f}".replace(",", "@").replace(".", ",").replace("@", ".")
+
+    pct = (buy_nominal / sell_nominal - 1.0) * 100.0 if sell_nominal > 0 else 0.0
     summary = (
-        f"Al vender {sell_nominal:,.0f} nominales de {sell_ticker} y rotar a {buy_ticker}, "
-        f"se obtienen {buy_nominal:,.0f} nominales ({'+' if nominal_pickup >= 0 else ''}{nominal_pickup:,.0f} nominales, "
-        f"ratio {nominal_expansion_ratio:.4f}) con un remanente en efectivo de ${cash_leftover:,.2f}."
+        f"Al vender {es(sell_nominal)} nominales de {sell_ticker} a {es(sell_price, 2)} y comprar {buy_ticker} "
+        f"a {es(buy_price, 2)}, se obtienen {es(buy_nominal)} nominales "
+        f"({'+' if nominal_pickup >= 0 else ''}{es(nominal_pickup)} nominales, {'+' if pct >= 0 else ''}{es(pct, 2)}%), "
+        f"con un sobrante en efectivo de {es(cash_leftover, 2)}."
     )
 
     return SwapSimulationResult(

@@ -53,6 +53,15 @@
         ::-webkit-scrollbar-track { background: #070a12; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #334155; }
+        /* Encabezados fijos: la línea inferior se dibuja con sombra (el borde no acompaña al sticky) */
+        thead.sticky th { box-shadow: inset 0 -1px 0 #1e293b; }
+        .tk-link { font-weight: 700; color: #f8fafc; text-underline-offset: 3px; }
+        .tk-link:hover { color: #6ee7b7; text-decoration: underline; }
+        th[data-sort] { cursor: pointer; }
+        th[data-sort]:hover { color: #f8fafc; }
+        th[data-sort].sorted { color: #f8fafc; }
+        .sort-ind { display: inline-block; width: 0.8em; font-size: 9px; color: #34d399; }
+        .row-caret { display: inline-block; width: 1em; color: #64748b; }
     </style>
 </head>
 <body class="bg-brand-dark text-slate-100 min-h-screen flex flex-col custom-scrollbar selection:bg-emerald-500 selection:text-black">
@@ -60,20 +69,17 @@
     <!-- Top Navigation Bar -->
     <header class="border-b border-brand-border bg-brand-card/95 backdrop-blur-md sticky top-0 z-40">
         <div class="max-w-[1720px] mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-3 sm:gap-4">
-            <!-- Brand & Status (clic: guía de uso) -->
-            <div class="flex items-center gap-3 cursor-pointer group shrink-0" onclick="openGuide()" title="Guía de uso: qué hace la app y cómo usarla">
-                <div class="relative h-10 w-10 shrink-0 rounded-xl group-hover:scale-105 transition bg-gradient-to-tr from-emerald-600 via-teal-500 to-cyan-400 p-0.5 flex items-center justify-center shadow-lg shadow-emerald-500/10">
-                    <div class="w-full h-full bg-brand-dark rounded-[10px] flex items-center justify-center">
-                        <i data-lucide="activity" class="w-5 h-5 text-emerald-400"></i>
-                    </div>
-                    <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-extrabold flex items-center justify-center border-2 border-brand-card">?</span>
+            <!-- Marca -->
+            <div class="flex items-center gap-3 shrink-0">
+                <div class="h-9 w-9 shrink-0 rounded-lg bg-brand-elevated border border-brand-border flex items-center justify-center">
+                    <i data-lucide="activity" class="w-5 h-5 text-emerald-400"></i>
                 </div>
                 <div class="whitespace-nowrap shrink-0">
-                    <div class="flex items-center gap-2">
-                        <h1 class="text-base font-extrabold tracking-tight text-white whitespace-nowrap leading-none">Bonistas Trading</h1>
-                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono font-semibold whitespace-nowrap">ARBITRAGE v1.1</span>
+                    <div class="flex items-baseline gap-2">
+                        <h1 class="text-base font-bold tracking-tight text-white whitespace-nowrap leading-none">Bonistas Trading</h1>
+                        <span class="text-[11px] text-slate-500 font-mono">v1.1</span>
                     </div>
-                    <p class="text-[11px] text-slate-400 whitespace-nowrap mt-1 leading-none">Renta Fija & Arbitraje de Curvas Soberanas</p>
+                    <p class="text-[11px] text-slate-400 whitespace-nowrap mt-1 leading-none">Renta fija y arbitraje de bonos argentinos</p>
                 </div>
             </div>
 
@@ -81,19 +87,19 @@
             <div class="hidden xl:flex items-center gap-2 text-xs font-mono shrink-0">
                 <div class="flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Dólar MEP:</span>
-                    <span id="header-mep" class="text-emerald-400 font-bold">$1,581.60</span>
+                    <span id="header-mep" class="text-slate-100 font-bold">-</span>
                 </div>
                 <div class="flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Dólar CCL:</span>
-                    <span id="header-ccl" class="text-cyan-400 font-bold">$1,679.80</span>
+                    <span id="header-ccl" class="text-slate-100 font-bold">-</span>
                 </div>
                 <div class="hidden 2xl:flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Canje C/D:</span>
-                    <span id="header-canje" class="text-amber-400 font-bold">+6.21%</span>
+                    <span id="header-canje" class="text-slate-100 font-bold">-</span>
                 </div>
                 <div class="hidden 2xl:flex items-center gap-2 bg-brand-elevated/70 px-2.5 py-1.5 rounded-lg border border-brand-border">
                     <span class="text-slate-400 font-sans text-[11px]">Mayorista A3500:</span>
-                    <span id="header-oficial" class="text-slate-300 font-bold">$1,547.00</span>
+                    <span id="header-oficial" class="text-slate-100 font-bold">-</span>
                 </div>
             </div>
 
@@ -103,10 +109,13 @@
                     <span id="market-status-dot" class="w-2 h-2 rounded-full bg-slate-400 shrink-0"></span>
                     <span id="market-status-text" class="hidden sm:inline truncate">Estado...</span>
                 </div>
+                <button onclick="openGuide()" title="Guía de uso: qué hace la app y cómo usarla" class="shrink-0 flex items-center px-2.5 py-1.5 rounded-lg bg-brand-elevated border border-brand-border text-slate-300 hover:text-white transition">
+                    <i data-lucide="circle-help" class="w-4 h-4"></i>
+                </button>
                 <div class="relative shrink-0">
                     <button onclick="toggleAlerts()" id="btn-alerts" title="Alertas" class="relative flex items-center px-2.5 py-1.5 rounded-lg bg-brand-elevated border border-brand-border text-slate-300 hover:text-white transition">
                         <i data-lucide="bell" class="w-4 h-4"></i>
-                        <span id="alerts-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold font-mono flex items-center justify-center">0</span>
+                        <span id="alerts-badge" class="hidden absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold font-mono flex items-center justify-center">0</span>
                     </button>
                     <div id="alerts-panel" class="hidden absolute right-0 mt-2 w-[420px] max-w-[92vw] bg-brand-card border border-brand-border rounded-xl shadow-2xl z-50 text-xs">
                         <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border">
@@ -115,7 +124,7 @@
                                 <button onclick="testAlert()" class="text-slate-400 hover:text-white">Probar aviso</button>
                             </div>
                         </div>
-                        <div class="px-4 py-2 border-b border-brand-border text-[11px] text-slate-500">Historial de avisos: cada uno dice si sigue vigente. Las oportunidades activas están siempre en el Command Center.</div>
+                        <div class="px-4 py-2 border-b border-brand-border text-[11px] text-slate-500">Historial de avisos: cada uno dice si sigue vigente. Las oportunidades activas están siempre en la pestaña Arbitrajes.</div>
                         <div class="px-4 py-2 border-b border-brand-border flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
                             <label class="flex items-center gap-1.5"><input type="checkbox" id="pref-windows" onchange="savePrefs()"> Notificaciones de Windows</label>
                             <label class="flex items-center gap-1.5" title="Las detectadas con BYMA (20 min de demora) quedan solo en este panel"><input type="checkbox" id="pref-realtime" onchange="savePrefs()"> Solo confirmadas en tiempo real</label>
@@ -137,22 +146,22 @@
         <nav class="max-w-[1720px] mx-auto px-4 lg:px-6 flex items-center gap-1 overflow-x-auto border-t border-brand-border/60 text-xs">
             <button onclick="switchTab('tab-quotes', this)" id="tab-btn-quotes" class="tab-btn active px-4 py-2.5 font-bold border-b-2 border-emerald-400 text-emerald-400 flex items-center gap-2 transition">
                 <i data-lucide="layout-grid" class="w-4 h-4"></i>
-                <span>Monitor de Cotizaciones</span>
-                <span id="count-badge" class="px-1.5 py-0.2 rounded-full bg-brand-elevated text-slate-300 text-[10px] font-mono">0</span>
+                <span>Cotizaciones</span>
+                <span id="count-badge" class="px-1.5 py-0.2 rounded-full bg-brand-elevated text-slate-300 text-[11px] font-mono">0</span>
             </button>
             <button onclick="switchTab('tab-curves', this)" id="tab-btn-curves" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="line-chart" class="w-4 h-4"></i>
-                <span>Curvas de Rendimiento</span>
+                <span>Curvas de rendimiento</span>
             </button>
             <button onclick="switchTab('tab-arbitrage', this)" id="tab-btn-arbitrage" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="target" class="w-4 h-4"></i>
-                <span>Command Center Arbitrajes</span>
-                <span id="signals-badge" class="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold font-mono">0</span>
+                <span>Arbitrajes</span>
+                <span id="signals-badge" class="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[11px] font-bold font-mono">0</span>
             </button>
             <button onclick="switchTab('tab-ci', this)" id="tab-btn-ci" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="clock" class="w-4 h-4"></i>
                 <span>CI vs 24hs</span>
-                <span id="ci-badge" class="px-2 py-0.5 rounded-full bg-slate-700 text-white text-[10px] font-bold font-mono">0</span>
+                <span id="ci-badge" class="px-2 py-0.5 rounded-full bg-slate-700 text-white text-[11px] font-bold font-mono">0</span>
             </button>
             <button onclick="switchTab('tab-fx', this)" id="tab-btn-fx" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="dollar-sign" class="w-4 h-4"></i>
@@ -164,7 +173,7 @@
             </button>
             <button onclick="switchTab('tab-swap', this)" id="tab-btn-swap" class="tab-btn px-4 py-2.5 font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
                 <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
-                <span>Simulador de Swaps</span>
+                <span>Simulador de swaps</span>
             </button>
         </nav>
     </header>
@@ -179,16 +188,15 @@
             <!-- Filter Bar -->
             <div class="flex flex-wrap items-center justify-between gap-3 bg-brand-card p-3 rounded-xl border border-brand-border shadow-sm">
                 <div class="flex flex-wrap items-center gap-1.5" id="filter-buttons-group">
-                    <button onclick="filterQuotes('ALL', this)" class="filter-btn active px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 transition">Todos (<span id="cnt-all">0</span>)</button>
-                    <button onclick="filterQuotes('HARD_DOLLAR', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Soberanos USD (<span id="cnt-HARD_DOLLAR">0</span>)</button>
-                    <button onclick="filterQuotes('ON', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Obligaciones Negociables (<span id="cnt-ON">0</span>)</button>
-                    <button onclick="filterQuotes('TASA_FIJA', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Tasa Fija / LECAPs</button>
-                    <button onclick="filterQuotes('CER', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Ajustables CER</button>
-                    <button onclick="filterQuotes('DUAL', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Bonos Duales</button>
-                    <button onclick="filterQuotes('BOPREAL', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">BOPREAL</button>
-                    <button onclick="filterQuotes('DOLLAR_LINKED', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Dólar Linked</button>
-                    <button onclick="filterQuotes('TAMAR', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">TAMAR / BADLAR</button>
-                    <div id="quotes-source-note" class="w-full text-[11px] text-slate-500 pt-1"></div>
+                    <button onclick="filterQuotes('ALL', this)" class="filter-btn active px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 transition">Todos <span data-count="ALL" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('HARD_DOLLAR', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Soberanos USD <span data-count="HARD_DOLLAR" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('ON', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Obligaciones negociables <span data-count="ON" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('TASA_FIJA', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Tasa fija / LECAP <span data-count="TASA_FIJA" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('CER', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">CER <span data-count="CER" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('DUAL', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Duales <span data-count="DUAL" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('BOPREAL', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">BOPREAL <span data-count="BOPREAL" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('DOLLAR_LINKED', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">Dólar linked <span data-count="DOLLAR_LINKED" class="font-mono font-normal opacity-60">0</span></button>
+                    <button onclick="filterQuotes('TAMAR', this)" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700 transition">TAMAR <span data-count="TAMAR" class="font-mono font-normal opacity-60">0</span></button>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -198,25 +206,26 @@
                                class="bg-brand-dark border border-brand-border text-xs rounded-lg pl-9 pr-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-60 font-mono transition">
                     </div>
                 </div>
+                <div id="quotes-source-note" class="w-full text-[11px] text-slate-500"></div>
             </div>
 
             <!-- Table Card -->
             <div class="bg-brand-card border border-brand-border rounded-xl overflow-hidden shadow-2xl">
-                <div class="overflow-x-auto max-h-[750px] custom-scrollbar">
+                <div class="overflow-auto fit-viewport custom-scrollbar">
                     <table class="w-full text-left text-xs whitespace-nowrap">
-                        <thead class="bg-brand-elevated text-slate-400 uppercase font-semibold border-b border-brand-border sticky top-0 z-20 select-none text-[11px]">
+                        <thead class="bg-brand-elevated text-slate-400 uppercase font-semibold sticky top-0 z-20 select-none text-[11px]">
                             <tr>
-                                <th onclick="sortTable('ticker')" class="px-3 py-2.5 cursor-pointer hover:text-white">Ticker <i data-lucide="arrow-up-down" class="w-3 h-3 inline"></i></th>
-                                <th onclick="sortTable('name')" class="px-3 py-2.5 cursor-pointer hover:text-white max-w-[220px] xl:max-w-[260px]">Denominación & Ley</th>
-                                <th onclick="sortTable('price_ars')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white">Pesos ($)</th>
-                                <th onclick="sortTable('price_mep')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white text-emerald-400">Dólar MEP (D)</th>
-                                <th onclick="sortTable('price_ccl')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white text-cyan-400">Dólar Cable (C)</th>
-                                <th onclick="sortTable('technical_value')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white">Valor Técnico</th>
-                                <th onclick="sortTable('parity_percentage')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white text-amber-300">Paridad</th>
-                                <th onclick="sortTable('ytm_percentage')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white text-emerald-400 font-bold">TIR / YTM</th>
-                                <th onclick="sortTable('tem_percentage')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white">TEM</th>
-                                <th onclick="sortTable('modified_duration')" class="px-2.5 py-2.5 text-right cursor-pointer hover:text-white">M. Duration</th>
-                                <th class="px-3 py-2.5 text-center">Acciones</th>
+                                <th data-sort="ticker" onclick="sortTable('ticker')" class="px-3 py-2.5">Ticker <span class="sort-ind"></span></th>
+                                <th data-sort="name" onclick="sortTable('name')" class="px-3 py-2.5 max-w-[220px] xl:max-w-[260px]">Denominación <span class="sort-ind"></span></th>
+                                <th data-sort="law" onclick="sortTable('law')" class="px-2.5 py-2.5">Ley <span class="sort-ind"></span></th>
+                                <th data-sort="price_ars" onclick="sortTable('price_ars')" class="px-2.5 py-2.5 text-right">Pesos <span class="sort-ind"></span></th>
+                                <th data-sort="price_mep" onclick="sortTable('price_mep')" class="px-2.5 py-2.5 text-right">Dólar MEP <span class="sort-ind"></span></th>
+                                <th data-sort="price_ccl" onclick="sortTable('price_ccl')" class="px-2.5 py-2.5 text-right">Dólar cable <span class="sort-ind"></span></th>
+                                <th data-sort="day_difference" onclick="sortTable('day_difference')" class="px-2.5 py-2.5 text-right" title="Variación del día de la especie principal (bonistas.com)">Var. día <span class="sort-ind"></span></th>
+                                <th data-sort="parity_percentage" onclick="sortTable('parity_percentage')" class="px-2.5 py-2.5 text-right">Paridad <span class="sort-ind"></span></th>
+                                <th data-sort="ytm_percentage" onclick="sortTable('ytm_percentage')" class="px-2.5 py-2.5 text-right">TIR <span class="sort-ind"></span></th>
+                                <th data-sort="tem_percentage" onclick="sortTable('tem_percentage')" class="px-2.5 py-2.5 text-right">TEM <span class="sort-ind"></span></th>
+                                <th data-sort="modified_duration" onclick="sortTable('modified_duration')" class="px-2.5 py-2.5 text-center" title="Duration modificada, en años">Duration <span class="sort-ind"></span></th>
                             </tr>
                         </thead>
                         <tbody id="quotes-table-body" class="divide-y divide-brand-border/60 font-mono">
@@ -254,13 +263,13 @@
                     <div id="curve-table-sub" class="text-slate-500 mb-2">En puntos básicos de TIR. Positivo = rinde más que sus vecinos.</div>
                     <div class="overflow-y-auto max-h-[480px] pr-2">
                         <table class="w-full font-mono">
-                            <thead class="text-slate-500 text-[10px] uppercase"><tr>
+                            <thead class="bg-brand-card text-slate-500 text-[11px] uppercase sticky top-0"><tr>
                                 <th class="text-left py-1 pl-1">Bono</th><th class="text-right px-2" id="curve-th-x">MD</th><th class="text-right px-2" id="curve-th-y">TIR</th><th class="text-right pr-3 pl-2" id="curve-th-r">Desvío</th>
                             </tr></thead>
                             <tbody id="curve-table-body" class="divide-y divide-brand-border/50"></tbody>
                         </table>
                     </div>
-                    <div id="curve-excluded" class="text-[10px] text-slate-500 mt-3"></div>
+                    <div id="curve-excluded" class="text-[11px] text-slate-500 mt-3"></div>
                 </div>
             </div>
         </section>
@@ -328,13 +337,13 @@
                             <i data-lucide="zap" class="w-4 h-4"></i>
                         </div>
                         <div>
-                            <h2 class="text-sm font-bold text-white">Señales Cuantitativas de Arbitraje Activas</h2>
-                            <p class="text-xs text-slate-400">Detección algorítmica de desarbitrajes fuera de bandas de desviación estándar</p>
+                            <h2 class="text-sm font-bold text-white">Señales activas</h2>
+                            <p class="text-xs text-slate-400">Oportunidades que superan tu ganancia neta mínima, con profundidad para el tamaño configurado</p>
                         </div>
                     </div>
                     <button onclick="triggerEvaluation()" class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center gap-1.5 shadow-md active:scale-95">
                         <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                        <span>Reevaluar Mercado</span>
+                        <span>Reevaluar</span>
                     </button>
                 </div>
 
@@ -349,7 +358,7 @@
                     <div>
                         <h3 class="text-sm font-bold text-white flex items-center gap-2">
                             <i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i>
-                            Matriz de Spread de Legislación (Bonares AL vs. Globales GD)
+                            Diferencial por legislación (Bonares AL vs. Globales GD)
                         </h3>
                         <p class="text-xs text-slate-400">Ratio = medio GD-D / medio AL-D (24hs). Rotar a NY si pasar de AL a GD cuesta ≤ 1,01 con costos. Además cada par tiene su <b>banda propia</b> (media de 21 ruedas ± 1,5 desvíos, con cierres de Rava): hay señal si el ratio sale de la banda, volver a la media cubre las 4 operaciones más tu ganancia mínima, y la banda fue rentable en ese par el último año. Es una señal estadística, no una ganancia asegurada.</p>
                     </div>
@@ -367,9 +376,9 @@
                     Ratios entre bonos de la curva (especie D)
                 </h3>
                 <p class="text-xs text-slate-400">Ratio = medio(B) / medio(A). "A→B" = nominales de B que se obtienen por cada nominal de A vendiendo a la compradora y comprando a la vendedora, con costos.</p>
-                <div class="overflow-x-auto">
+                <div class="overflow-auto max-h-[460px] custom-scrollbar">
                     <table class="w-full text-xs font-mono whitespace-nowrap">
-                        <thead class="text-slate-400 uppercase text-[10px] border-b border-brand-border">
+                        <thead class="bg-brand-card text-slate-400 uppercase text-[11px] sticky top-0 z-10">
                             <tr><th class="px-3 py-2 text-left">Par (A / B)</th><th class="px-3 py-2">Plazo</th><th class="px-3 py-2 text-right">Ratio medio</th><th class="px-3 py-2 text-right">A→B</th><th class="px-3 py-2 text-right">B→A</th><th class="px-3 py-2 text-right">Z</th><th class="px-3 py-2 text-right">Banda 21r</th><th class="px-3 py-2 text-right">Media 1 año</th><th class="px-3 py-2 text-left">Estado</th></tr>
                         </thead>
                         <tbody id="curve-ratios-body" class="divide-y divide-brand-border/60"></tbody>
@@ -384,9 +393,9 @@
                     Pares de bonos casi sustitutos (CER en pesos · Tesoro en dólares)
                 </h3>
                 <p class="text-xs text-slate-400">Bonos CER cupón cero de vencimientos contiguos, DICP/DIP0 (mismo flujo), TX31/DICP y AO28/AO29/AN29 (especie D). Misma lectura que la tabla de arriba. Cuando el ratio sale de su banda y la banda fue rentable en ese par, se genera la señal <b>PAIR_BAND</b> (estadística, sin notificación de Windows). TX31/DICP y AO29/AN29 se corrigen por los cupones y amortizaciones de cada bono (cronograma de Bull Market, con la sesión activa); en las ruedas del corte no muestran banda.</p>
-                <div class="overflow-x-auto">
+                <div class="overflow-auto max-h-[460px] custom-scrollbar">
                     <table class="w-full text-xs font-mono whitespace-nowrap">
-                        <thead class="text-slate-400 uppercase text-[10px] border-b border-brand-border">
+                        <thead class="bg-brand-card text-slate-400 uppercase text-[11px] sticky top-0 z-10">
                             <tr><th class="px-3 py-2 text-left">Par (A / B)</th><th class="px-3 py-2">Plazo</th><th class="px-3 py-2 text-right">Ratio medio</th><th class="px-3 py-2 text-right">A→B</th><th class="px-3 py-2 text-right">B→A</th><th class="px-3 py-2 text-right">Z</th><th class="px-3 py-2 text-right">Banda 21r</th><th class="px-3 py-2 text-right">Media 1 año</th><th class="px-3 py-2 text-left">Estado</th></tr>
                         </thead>
                         <tbody id="pair-ratios-body" class="divide-y divide-brand-border/60"></tbody>
@@ -399,12 +408,12 @@
                 <div>
                     <h3 class="text-sm font-bold text-white flex items-center gap-2">
                         <i data-lucide="scale" class="w-4 h-4 text-emerald-400"></i>
-                        Estrategia 2: Relative Value & Duration Swap (Tramo Corto GD29 vs AL30)
+                        Valor relativo en el tramo corto (GD29 vs AL30)
                     </h3>
                     <p id="rv-desc-text" class="text-xs text-slate-400 mt-1">Calculando diferencial de TIR y convexidad relativa...</p>
                 </div>
                 <div id="rv-badge" class="px-4 py-2 rounded-xl text-xs font-mono font-bold bg-brand-elevated text-slate-300 border border-brand-border">
-                    Spread: -- bps
+                    Diferencial: -- pb
                 </div>
             </div>
         </section>
@@ -425,15 +434,15 @@
                 <label class="flex items-center gap-2 text-slate-300"><input id="ci-hide-thin" type="checkbox" checked onchange="fetchCiScanner()"> Ocultar sin profundidad</label>
             </div>
             <div class="bg-brand-card border border-brand-border rounded-xl overflow-hidden shadow-2xl">
-                <div class="overflow-x-auto max-h-[700px] custom-scrollbar">
+                <div class="overflow-auto fit-viewport custom-scrollbar">
                     <table class="w-full text-left text-xs whitespace-nowrap">
-                        <thead class="bg-brand-elevated text-slate-400 uppercase text-[10px] font-semibold border-b border-brand-border sticky top-0">
+                        <thead class="bg-brand-elevated text-slate-400 uppercase text-[11px] font-semibold sticky top-0 z-10">
                             <tr>
                                 <th class="px-3 py-2.5">Especie</th><th class="px-3 py-2.5">Operación</th>
                                 <th class="px-3 py-2.5 text-right">Vender a</th><th class="px-3 py-2.5 text-right">Comprar a</th>
                                 <th class="px-3 py-2.5 text-right">VN</th><th class="px-3 py-2.5 text-right">Bruto</th>
                                 <th class="px-3 py-2.5 text-right">Costos</th><th class="px-3 py-2.5 text-right">Caución</th>
-                                <th class="px-3 py-2.5 text-right">Ajuste cupón</th><th class="px-3 py-2.5 text-right text-emerald-400">Neto</th>
+                                <th class="px-3 py-2.5 text-right">Ajuste cupón</th><th class="px-3 py-2.5 text-right">Neto</th>
                                 <th class="px-3 py-2.5">Notas</th>
                             </tr>
                         </thead>
@@ -459,18 +468,18 @@
             </div>
             <div id="fx-roundtrips" class="grid gap-3 md:grid-cols-2"></div>
             <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
-                <h3 class="text-xs font-bold text-amber-400 uppercase mb-1">Pasar dólares cable a MEP con un mismo título</h3>
+                <h3 class="text-xs font-bold text-slate-200 uppercase mb-1">Pasar dólares cable a MEP con un mismo título</h3>
                 <p class="text-[11px] text-slate-400 mb-2">Para cuando cobrás renta o amortización en cable: comprar el título en especie C y venderlo en especie D. El neto es cuántos dólares MEP de más (o de menos) quedan por cada dólar cable, con las 2 comisiones. Compará contra lo que te da el broker por convertir. Verificá en el broker si la venta en D exige esperar un día (parking). Informativo: no genera alertas.</p>
-                <table class="w-full text-xs font-mono"><thead class="text-slate-400 text-[10px] uppercase border-b border-brand-border"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Plazo</th><th class="text-right">Compro C a</th><th class="text-right">Vendo D a</th><th class="text-right">Neto</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-cable-body" class="divide-y divide-brand-border/60"></tbody></table>
+                <div class="overflow-auto max-h-[440px] custom-scrollbar"><table class="w-full text-xs font-mono"><thead class="bg-brand-card text-slate-400 text-[11px] uppercase sticky top-0"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Plazo</th><th class="text-right">Compro C a</th><th class="text-right">Vendo D a</th><th class="text-right">Neto</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-cable-body" class="divide-y divide-brand-border/60"></tbody></table></div>
             </div>
             <div class="grid gap-4 lg:grid-cols-2">
                 <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
-                    <h3 class="text-xs font-bold text-emerald-400 uppercase mb-2">Más barato para COMPRAR dólares</h3>
-                    <table class="w-full text-xs font-mono"><thead class="text-slate-400 text-[10px] uppercase border-b border-brand-border"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Pesos / Dólares</th><th class="text-right">TC</th><th class="text-right">vs AL30</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-buy-body" class="divide-y divide-brand-border/60"></tbody></table>
+                    <h3 class="text-xs font-bold text-slate-200 uppercase mb-2">Más barato para COMPRAR dólares</h3>
+                    <div class="overflow-auto max-h-[440px] custom-scrollbar"><table class="w-full text-xs font-mono"><thead class="bg-brand-card text-slate-400 text-[11px] uppercase sticky top-0"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Pesos / Dólares</th><th class="text-right">TC</th><th class="text-right">vs AL30</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-buy-body" class="divide-y divide-brand-border/60"></tbody></table></div>
                 </div>
                 <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl">
-                    <h3 class="text-xs font-bold text-cyan-400 uppercase mb-2">Más caro para VENDER dólares</h3>
-                    <table class="w-full text-xs font-mono"><thead class="text-slate-400 text-[10px] uppercase border-b border-brand-border"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Pesos / Dólares</th><th class="text-right">TC</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-sell-body" class="divide-y divide-brand-border/60"></tbody></table>
+                    <h3 class="text-xs font-bold text-slate-200 uppercase mb-2">Más caro para VENDER dólares</h3>
+                    <div class="overflow-auto max-h-[440px] custom-scrollbar"><table class="w-full text-xs font-mono"><thead class="bg-brand-card text-slate-400 text-[11px] uppercase sticky top-0"><tr><th class="py-1.5 text-left">Bono / ON</th><th class="text-left">Pesos / Dólares</th><th class="text-right">TC</th><th class="text-right">Prof.</th></tr></thead><tbody id="fx-sell-body" class="divide-y divide-brand-border/60"></tbody></table></div>
                 </div>
             </div>
         </section>
@@ -482,7 +491,7 @@
                 <p id="on-status" class="text-amber-300"></p>
             </div>
             <div>
-                <h3 class="text-xs font-bold text-emerald-400 uppercase mb-2">Ideas de canje dentro del mismo emisor</h3>
+                <h3 class="text-xs font-bold text-slate-200 uppercase mb-2">Ideas de canje dentro del mismo emisor</h3>
                 <div id="on-ideas" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
             </div>
             <div class="bg-brand-card border border-brand-border rounded-xl overflow-hidden shadow-2xl">
@@ -491,11 +500,11 @@
                            class="bg-brand-dark border border-brand-border rounded-lg px-3 py-1.5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-64 font-mono">
                     <label class="flex items-center gap-1.5 text-slate-400"><input type="checkbox" id="on-only-liquid" onchange="renderOnTable()" checked> Solo con puntas a menos de 2%</label>
                 </div>
-                <div class="overflow-x-auto max-h-[650px] custom-scrollbar">
+                <div class="overflow-auto fit-viewport custom-scrollbar">
                     <table class="w-full text-left text-xs whitespace-nowrap">
-                        <thead class="bg-brand-elevated text-slate-400 uppercase text-[10px] font-semibold sticky top-0 z-10">
+                        <thead class="bg-brand-elevated text-slate-400 uppercase text-[11px] font-semibold sticky top-0 z-10">
                             <tr><th class="px-3 py-2">ON</th><th class="px-3">Emisor</th><th class="px-3 text-right">Precio</th><th class="px-3 text-right">Puntas</th>
-                                <th class="px-3 text-right text-emerald-400">TIR</th><th class="px-3 text-right">MD</th><th class="px-3 text-right">Vs emisor (pb)</th>
+                                <th class="px-3 text-right">TIR</th><th class="px-3 text-right">MD</th><th class="px-3 text-right">Vs emisor (pb)</th>
                                 <th class="px-3 text-right">Vs soberano (pb)</th><th class="px-3 text-right">TIR bonistas</th><th class="px-3">Paga en</th><th class="px-3">Vence</th><th class="px-3">Avisos</th></tr>
                         </thead>
                         <tbody id="on-body" class="divide-y divide-brand-border/60 font-mono"></tbody>
@@ -511,7 +520,7 @@
                         <i data-lucide="arrow-left-right" class="w-5 h-5"></i>
                     </div>
                     <div>
-                        <h2 class="text-base font-bold text-white">Simulador de Rotaciones & Arbitraje de Swaps</h2>
+                        <h2 class="text-base font-bold text-white">Simulador de swaps</h2>
                         <p class="text-xs text-slate-400">Nominales que se obtienen al rotar de un bono a otro, descontando el costo por operación (comisión, derechos e impuestos).</p>
                     </div>
                 </div>
@@ -564,7 +573,7 @@
 
                     <button type="submit" class="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/10 active:scale-[0.99] flex items-center justify-center gap-2">
                         <i data-lucide="calculator" class="w-4 h-4"></i>
-                        <span>Calcular Arbitraje de Swap</span>
+                        <span>Calcular</span>
                     </button>
                 </form>
 
@@ -574,32 +583,34 @@
                 <div id="swap-result-box" class="mt-6 p-5 rounded-xl bg-brand-dark border border-emerald-500/30 space-y-4">
                     <div class="flex items-center justify-between border-b border-brand-border pb-3">
                         <h4 class="text-xs font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i> Resultado de la Operación
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i> Resultado
                         </h4>
                         <span id="swap-ratio-badge" class="font-mono text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30">
-                            Ratio: 1.0338
+                            Ratio: -
                         </span>
                     </div>
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
                         <div class="bg-brand-elevated p-3 rounded-lg border border-brand-border">
-                            <span class="text-slate-400 block text-[10px] font-sans">Neto Liquidado Venta:</span>
+                            <span class="text-slate-400 block text-[11px] font-sans">Neto de la venta</span>
                             <span id="res-sell-net" class="text-sm font-bold text-white">$---</span>
                         </div>
                         <div class="bg-brand-elevated p-3 rounded-lg border border-brand-border">
-                            <span class="text-slate-400 block text-[10px] font-sans">Nominales Adquiridos:</span>
+                            <span class="text-slate-400 block text-[11px] font-sans">Nominales comprados</span>
                             <span id="res-buy-nominal" class="text-sm font-bold text-emerald-400">---</span>
                         </div>
                         <div class="bg-brand-elevated p-3 rounded-lg border border-brand-border">
-                            <span class="text-slate-400 block text-[10px] font-sans">Yield Pickup (TIR):</span>
-                            <span id="res-yield-pickup" class="text-sm font-bold text-cyan-300">--- bps</span>
+                            <span class="text-slate-400 block text-[11px] font-sans">Mejora de TIR</span>
+                            <span id="res-yield-pickup" class="text-sm font-bold text-cyan-300">--- pb</span>
                         </div>
                         <div class="bg-brand-elevated p-3 rounded-lg border border-brand-border">
-                            <span class="text-slate-400 block text-[10px] font-sans">Efectivo Remanente:</span>
+                            <span class="text-slate-400 block text-[11px] font-sans">Efectivo sobrante</span>
                             <span id="res-leftover" class="text-sm font-bold text-slate-300">$---</span>
                         </div>
                     </div>
 
+                    <div id="res-prices" class="text-xs text-slate-300 font-mono leading-relaxed"></div>
+                    <div id="res-notes" class="hidden text-[11px] text-amber-300/90 font-sans space-y-0.5"></div>
                     <p id="res-summary-message" class="text-xs text-slate-300 leading-relaxed bg-brand-elevated/70 p-3 rounded-lg border border-brand-border font-sans"></p>
                 </div>
             </div>
@@ -641,7 +652,7 @@
                         <div class="grid md:grid-cols-3 gap-3">
                             <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">1 · Observa</div><div class="text-xs">Puntas de compra y venta de todos los bonos (BYMA, y Bull Market en tiempo real si conectás tu sesión), flujos de pago, cauciones e indicadores.</div></div>
                             <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">2 · Calcula</div><div class="text-xs">Compara CI contra 24hs, pesos contra dólares y bonos entre sí. Descuenta comisiones, caución, cupones y verifica que haya profundidad para tu tamaño.</div></div>
-                            <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">3 · Avisa</div><div class="text-xs">Si el neto supera el mínimo, genera una señal en el Command Center y una notificación de Windows. Vos decidís y operás en tu broker.</div></div>
+                            <div class="p-3 rounded-xl bg-brand-dark border border-brand-border"><div class="text-emerald-400 font-bold text-xs mb-1">3 · Avisa</div><div class="text-xs">Si el neto supera el mínimo, genera una señal en la pestaña Arbitrajes y una notificación de Windows. Vos decidís y operás en tu broker.</div></div>
                         </div>
                         <p>Con tus parámetros actuales, una oportunidad solo aparece si deja <b class="text-emerald-400" data-gp="min">-</b> neto o más, con un costo de <b class="text-white" data-gp="fee">-</b> por operación y profundidad suficiente para <b class="text-white" data-gp="size">-</b>.</p>
                         <p class="text-xs text-slate-400">La app <b>no envía órdenes</b>: detecta, calcula y avisa. Además incluye herramientas de análisis (curvas, TIR, simulador de swaps) para decidir con más información.</p>
@@ -650,7 +661,7 @@
                     <section data-gs="inicio" class="guide-sec hidden space-y-4">
                         <h2 class="text-lg font-bold text-white">Primeros pasos</h2>
                         <ol class="space-y-3">
-                            <li class="flex gap-3"><span class="guide-step">1</span><div><b class="text-white">Revisá tus parámetros</b> en <a class="guide-go" data-tab="tab-arbitrage">Command Center</a>: costo por operación (todo incluido), ganancia neta mínima y tamaño de operación en USD. Todo se recalcula al guardar.</div></li>
+                            <li class="flex gap-3"><span class="guide-step">1</span><div><b class="text-white">Revisá tus parámetros</b> en <a class="guide-go" data-tab="tab-arbitrage">Arbitrajes</a>: costo por operación (todo incluido), ganancia neta mínima y tamaño de operación en USD. Todo se recalcula al guardar.</div></li>
                             <li class="flex gap-3"><span class="guide-step">2</span><div><b class="text-white">Conectá Bull Market (opcional, recomendado).</b> Sin esto las puntas vienen de BYMA con <b>20 minutos de demora</b>. Pegá el encabezado <code>cookie</code> completo de tu sesión en el panel "Bull Market · tiempo real" (ahí están los pasos para copiarlo). Pegalo <b>solo ahí</b>, nunca en chats ni capturas. Con la sesión activa la app también descarga, una vez por día, los cronogramas de pago de los bonos. Cuando la sesión venza, te avisa.</div></li>
                             <li class="flex gap-3"><span class="guide-step">3</span><div><b class="text-white">Configurá las alertas</b> en la campanita 🔔 de arriba a la derecha. Sugerencia: activá <i>"Solo confirmadas en tiempo real"</i> para que Windows te avise únicamente lo accionable. Usá <i>"Probar aviso"</i> para comprobar que las notificaciones se ven.</div></li>
                             <li class="flex gap-3"><span class="guide-step">4</span><div><b class="text-white">Dejá la app corriendo durante la rueda.</b> Consulta el mercado cada minuto, solo en días hábiles y en horario de mercado. No hace falta tener esta pestaña abierta para recibir las notificaciones de Windows.</div></li>
@@ -663,10 +674,10 @@
                         <h2 class="text-lg font-bold text-white">Herramientas</h2>
                         <div class="grid md:grid-cols-2 gap-3">
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="layout-grid" class="w-4 h-4"></i> Monitor de cotizaciones <a class="guide-go ml-auto" data-tab="tab-quotes">Abrir →</a></div>
-                                Todos los bonos con precio en pesos, MEP y cable, TIR, duration, paridad y valor técnico. Filtrá por familia o buscá un ticker. <b>Ficha</b> muestra el cronograma de pagos; <b>Swap</b> lo lleva al simulador.</div>
+                                Todos los bonos con precio en pesos, MEP y cable, variación del día, paridad, TIR y duration. Filtrá por familia o buscá un ticker. Tocá el <b>ticker</b> para abrir la ficha: datos del bono, sensibilidad a la TIR, historia de precio, TIR y paridad, y cronograma de pagos.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="line-chart" class="w-4 h-4"></i> Curvas de rendimiento <a class="guide-go ml-auto" data-tab="tab-curves">Abrir →</a></div>
                                 Curvas por familia (soberanos, tasa fija, CER, provinciales, dollar linked, TAMAR/duales). La tabla de <b>desvíos</b> muestra qué bonos rinden más (verde, relativamente baratos) o menos (rojo, caros) que su curva: ideas para rotar. <b>Argentina vs región</b> muestra el riesgo país por tramo. En los bonos en dólares podés ver la TIR en <b>MEP o en cable</b> (la diferencia es el canje).</div>
-                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="target" class="w-4 h-4"></i> Command Center <a class="guide-go ml-auto" data-tab="tab-arbitrage">Abrir →</a></div>
+                            <div class="guide-card"><div class="guide-card-h"><i data-lucide="target" class="w-4 h-4"></i> Arbitrajes <a class="guide-go ml-auto" data-tab="tab-arbitrage">Abrir →</a></div>
                                 El centro operativo: parámetros, conexión con Bull Market, <b>señales activas</b>, matriz de prima de legislación AL/GD, ratios entre bonos de la curva y estrategias de valor relativo y breakeven de inflación.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="clock" class="w-4 h-4"></i> CI vs 24hs <a class="guide-go ml-auto" data-tab="tab-ci">Abrir →</a></div>
                                 Para cada especie compara Contado Inmediato contra 24hs en las dos direcciones: bruto, costos, caución, ajuste por cupón y neto. En verde, las que superan tu mínimo con profundidad suficiente. <b>¿?</b> = sin cronograma confiable cerca de un pago; <b>⚠ corte</b> = brecha que es un pago no informado, no un arbitraje. Ninguno de los dos genera señal.</div>
@@ -675,9 +686,9 @@
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="building-2" class="w-4 h-4"></i> ON: valor relativo <a class="guide-go ml-auto" data-tab="tab-on">Abrir →</a></div>
                                 TIR y duration de cada ON en dólares con precio y cronograma de Bull Market, cuánto rinde contra las otras ON de su emisor y contra el soberano, e ideas de canje dentro del mismo emisor (vender la que rinde de menos, comprar la que rinde de más, neto de costos). Es informativo: no genera alertas. Los cronogramas se descargan una vez por día con la sesión activa. Bull Market no informa rescates anticipados: las ON sobre la par llevan aviso.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="arrow-left-right" class="w-4 h-4"></i> Simulador de swaps <a class="guide-go ml-auto" data-tab="tab-swap">Abrir →</a></div>
-                                Cuántos nominales del bono B recibís vendiendo X nominales del bono A, descontando costos, y cuánta TIR ganás o perdés con la rotación.</div>
+                                Cuántos nominales del bono B recibís vendiendo X nominales del bono A, descontando costos, y cuánta TIR ganás o perdés con la rotación. Calcula como el broker: <b>vende a la punta compradora y compra a la vendedora</b>, recorriendo el libro para tu cantidad (Bull Market en tiempo real; sin sesión, BYMA con demora; sin puntas, el último operado, con aviso). Muestra los precios usados y de dónde salen. Poné la cantidad que vas a operar: el precio promedio depende de la profundidad.</div>
                             <div class="guide-card md:col-span-2"><div class="guide-card-h"><i data-lucide="bell" class="w-4 h-4"></i> Alertas (campanita)</div>
-                                Historial de avisos: oportunidades nuevas, confirmaciones en tiempo real, sesión de Bull Market vencida y fuentes caídas. El número rojo cuenta solo lo que todavía no viste <b>y sigue vigente</b>; se pone en cero al abrir el panel. Cada aviso indica si la oportunidad está <i>Vigente</i> o <i>Expirada</i>: lo operable ahora está siempre en el Command Center. Las señales estadísticas (sin ganancia neta calculada) quedan en el historial pero no notifican ni suman al número. Desde ahí elegís qué notifica Windows.</div>
+                                Historial de avisos: oportunidades nuevas, confirmaciones en tiempo real, sesión de Bull Market vencida y fuentes caídas. El número rojo cuenta solo lo que todavía no viste <b>y sigue vigente</b>; se pone en cero al abrir el panel. Cada aviso indica si la oportunidad está <i>Vigente</i> o <i>Expirada</i>: lo operable ahora está siempre en la pestaña Arbitrajes. Las señales estadísticas (sin ganancia neta calculada) quedan en el historial pero no notifican ni suman al número. Desde ahí elegís qué notifica Windows.</div>
                         </div>
                     </section>
 
@@ -687,7 +698,7 @@
                             <div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">CI_24HS</span><span class="text-emerald-400 font-bold">Neto 0,52%</span><span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Confirmada en tiempo real</span></div>
                             <div class="font-mono text-white">GD30D CI → GD30D 24HS</div>
                             <div class="text-slate-400">GD30D: vender CI a 54,80 y comprar 24hs a 54,30 (920 VN ≈ USD 500). Bruto 0,92%, costos 0,22%, neto 0,52%… <span class="text-slate-500">· activa desde 11:42</span></div>
-                            <div class="text-[10px] text-slate-600">(ejemplo ilustrativo)</div>
+                            <div class="text-[11px] text-slate-600">(ejemplo ilustrativo)</div>
                         </div>
                         <ul class="space-y-2 text-sm">
                             <li><b class="text-white">Neto</b>: ganancia después de comisiones (las dos patas), caución y ajuste por cupón. Es lo que importa, no el bruto.</li>
@@ -730,7 +741,7 @@
                     <section data-gs="limites" class="guide-sec hidden space-y-4">
                         <h2 class="text-lg font-bold text-white">Fuentes y límites</h2>
                         <table class="w-full text-xs">
-                            <thead class="text-slate-500 uppercase text-[10px]"><tr><th class="text-left py-1">Fuente</th><th class="text-left">Para qué</th><th class="text-left">Demora</th></tr></thead>
+                            <thead class="text-slate-500 uppercase text-[11px]"><tr><th class="text-left py-1">Fuente</th><th class="text-left">Para qué</th><th class="text-left">Demora</th></tr></thead>
                             <tbody class="divide-y divide-brand-border/60">
                                 <tr><td class="py-1.5 text-white">BYMA Open Data</td><td>Puntas CI/24hs, cauciones, horario de mercado</td><td class="text-amber-300">20 min</td></tr>
                                 <tr><td class="py-1.5 text-white">Bull Market (tu sesión)</td><td>Puntas con 5 niveles de profundidad; cronogramas de pago</td><td class="text-emerald-300">Tiempo real</td></tr>
@@ -738,7 +749,8 @@
                                 <tr><td class="py-1.5 text-white">CompararBonos</td><td>Flujos de pago y clasificación de bonos</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">Mercados Argentina · Bruno618</td><td>Cronogramas de provinciales (verificación por consenso)</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">MAE</td><td>Feriados de mercado (Argentina y EE.UU.)</td><td>Diario</td></tr>
-                                <tr><td class="py-1.5 text-white">BCRA</td><td>CER, TAMAR, dólar A3500</td><td>Diario</td></tr>
+                                <tr><td class="py-1.5 text-white">BCRA</td><td>CER (también su historia, para la TIR histórica de los CER), TAMAR, dólar A3500</td><td>Diario</td></tr>
+                                <tr><td class="py-1.5 text-white">Rava</td><td>Cierres diarios históricos: bandas de los ratios y gráficos de la ficha</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">DolarAPI</td><td>Dólar MEP, CCL y oficial de referencia</td><td>Intradiario</td></tr>
                             </tbody>
                         </table>
@@ -758,7 +770,7 @@
                 </div>
             </div>
             <div class="flex items-center justify-between px-6 py-3 border-t border-brand-border text-xs">
-                <span class="text-slate-500">Podés volver a abrir esta guía tocando el logo de arriba a la izquierda.</span>
+                <span class="text-slate-500">Podés volver a abrir esta guía con el botón <b>?</b> de arriba a la derecha.</span>
                 <div class="flex gap-2">
                     <button onclick="guideStep(-1)" class="px-3 py-1.5 rounded-lg bg-brand-elevated text-slate-300 hover:text-white">← Anterior</button>
                     <button onclick="guideStep(1)" id="guide-next" class="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-400">Siguiente →</button>
@@ -779,36 +791,70 @@
         .guide-dt { color: #f8fafc; font-weight: 700; margin-bottom: 0.15rem; }
     </style>
 
-    <div id="cashflow-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-brand-card border border-brand-border rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="p-5 border-b border-brand-border flex items-center justify-between">
-                <div>
-                    <h3 id="modal-ticker-title" class="text-base font-bold text-white font-mono">AL30 - Flujo de Fondos</h3>
-                    <p id="modal-ticker-desc" class="text-xs text-slate-400 font-sans">Cronograma de pagos de cupones y amortización</p>
+    <div id="cashflow-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onclick="if (event.target === this) closeModal()">
+        <div class="bg-brand-card border border-brand-border rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-brand-border flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                    <h3 id="modal-ticker-title" class="text-base font-bold text-white font-mono truncate">AL30 - Ficha</h3>
+                    <div id="ficha-chips" class="mt-2 flex flex-wrap gap-1.5 text-[11px] font-sans"></div>
                 </div>
-                <button onclick="closeModal()" class="p-2 rounded-lg bg-brand-elevated text-slate-400 hover:text-white transition">
+                <button onclick="closeModal()" class="p-2 rounded-lg bg-brand-elevated text-slate-400 hover:text-white transition shrink-0">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
-            <div class="p-5 overflow-y-auto custom-scrollbar flex-1">
-                <table class="w-full text-left text-xs font-mono">
-                    <thead class="bg-brand-elevated text-slate-400 uppercase border-b border-brand-border sticky top-0">
-                        <tr>
-                            <th class="px-3 py-2">Fecha</th>
-                            <th class="px-3 py-2 text-right">Amort. ($)</th>
-                            <th class="px-3 py-2 text-right">Cupón ($)</th>
-                            <th class="px-3 py-2 text-right text-emerald-400">Total Flujo</th>
-                            <th class="px-3 py-2 text-right text-slate-400">Residual</th>
-                        </tr>
-                    </thead>
-                    <tbody id="modal-cashflows-body" class="divide-y divide-brand-border/60">
-                        <!-- Populated by JS -->
-                    </tbody>
-                </table>
+            <div class="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-5">
+                <!-- Métricas al precio actual -->
+                <div id="ficha-metrics" class="grid grid-cols-2 md:grid-cols-4 gap-2.5"></div>
+                <div id="ficha-next-payment" class="hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200 font-sans"></div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Dónde está contra su último año -->
+                    <div class="rounded-xl border border-brand-border bg-brand-dark/60 p-4">
+                        <div class="text-xs font-bold text-white font-sans">Contra su último año</div>
+                        <div class="text-[11px] text-slate-500 font-sans mb-3">Último cierre comparado con los cierres de los últimos 365 días.</div>
+                        <div id="ficha-year" class="space-y-4 text-xs"></div>
+                    </div>
+                    <!-- Sensibilidad -->
+                    <div class="rounded-xl border border-brand-border bg-brand-dark/60 p-4">
+                        <div class="text-xs font-bold text-white font-sans">Sensibilidad del precio a la TIR</div>
+                        <div class="text-[11px] text-slate-500 font-sans mb-3">Cuánto cambia el precio si la TIR se mueve esos puntos, con los mismos flujos.</div>
+                        <div id="ficha-sensitivity" class="text-xs font-mono"></div>
+                    </div>
+                </div>
+
+                <!-- Historia -->
+                <div class="rounded-xl border border-brand-border bg-brand-dark/60 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div id="ficha-tabs" class="flex flex-wrap gap-1.5"></div>
+                        <div id="ficha-ranges" class="flex gap-1"></div>
+                    </div>
+                    <div id="ficha-pairs" class="flex flex-wrap gap-1.5 mb-2"></div>
+                    <div id="ficha-chart" class="w-full h-[340px]"></div>
+                    <div id="ficha-chart-notes" class="mt-2 text-[11px] text-slate-500 font-sans space-y-0.5"></div>
+                </div>
+
+                <!-- Flujo de fondos -->
+                <div>
+                    <div class="text-xs font-bold text-white font-sans mb-2">Flujo de fondos pendiente <span class="font-normal text-slate-500">(por 100 VN)</span></div>
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-brand-elevated text-slate-400 uppercase border-b border-brand-border">
+                            <tr>
+                                <th class="px-3 py-2">Fecha</th>
+                                <th class="px-3 py-2 text-right">Amort. ($)</th>
+                                <th class="px-3 py-2 text-right">Cupón ($)</th>
+                                <th class="px-3 py-2 text-right text-emerald-400">Total Flujo</th>
+                                <th class="px-3 py-2 text-right text-slate-400">Residual</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-cashflows-body" class="divide-y divide-brand-border/60">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
             <div class="p-4 border-t border-brand-border bg-brand-dark flex justify-end gap-2">
                 <button onclick="closeModal()" class="px-4 py-2 rounded-lg bg-brand-elevated text-slate-300 text-xs font-semibold hover:bg-slate-700 transition">Cerrar</button>
-                <button onclick="modalOpenSwap()" class="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400 transition">Llevar al Simulador</button>
+                <button onclick="modalOpenSwap()" class="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400 transition">Llevar al simulador</button>
             </div>
         </div>
     </div>
@@ -819,6 +865,8 @@
         let currentFilter = 'ALL';
         let currentCurve = 'SOBERANOS_USD';
         let currentSort = { column: 'ticker', asc: true };
+        try { currentSort = JSON.parse(localStorage.getItem('quotesSort')) || currentSort; } catch (_) {}
+        const TEXT_SORT_COLUMNS = ['ticker', 'name', 'law'];
         let activeModalTicker = '';
 
         function renderIcons() {
@@ -833,6 +881,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             renderIcons();
+            fitTables();
             fetchStatus();
             fetchSettings();
             fetchMacro();
@@ -883,9 +932,27 @@
             }
 
             renderIcons();
+            fitTables();
         }
 
         // ==================== DATA FETCHING ====================
+        // Formato numérico único para toda la app (es-AR: miles con punto, decimales con coma)
+        const nf = (v, d = 2) => Number(v).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+        // Igual, pero con los decimales que traiga el dato (precios de puntas, parámetros)
+        const nv = v => (v === null || v === undefined) ? '-' : Number(v).toLocaleString('es-AR', { maximumFractionDigits: 4 });
+        const STRATEGY_LABELS = {
+            LAW_PREMIUM: 'Legislación AL / GD', RELATIVE_VALUE_CURVE: 'Valor relativo', BREAKEVEN_CER_FIXED: 'CER vs tasa fija',
+            DUAL_TAMAR_CER: 'Duales', CI_24HS: 'CI vs 24hs', PAIR_BAND: 'Banda de par',
+        };
+        const ACTION_LABELS = {
+            ROTAR_A_NY: 'Rotar a ley NY', ROTAR_A_ARG: 'Rotar a ley ARG', SWAP_DURACION: 'Cambio de duration',
+            COMPRAR_CER: 'Comprar CER', COMPRAR_TASA_FIJA: 'Comprar tasa fija', COMPRAR_DUAL: 'Comprar dual',
+        };
+        function labelOf(map, key) {
+            if (map[key]) return map[key];
+            const t = String(key || '').replace(/_/g, ' ').toLowerCase();
+            return t.charAt(0).toUpperCase() + t.slice(1);
+        }
         function esc(v) {
             return String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
         }
@@ -925,26 +992,34 @@
                 const signals = data.opportunities.filter(o => o.signal).length;
                 const badge = document.getElementById('ci-badge');
                 badge.textContent = signals;
-                badge.className = `px-2 py-0.5 rounded-full text-white text-[10px] font-bold font-mono ${signals ? 'bg-rose-500' : 'bg-slate-700'}`;
+                badge.className = `px-2 py-0.5 rounded-full text-white text-[11px] font-bold font-mono ${signals ? 'bg-rose-500' : 'bg-slate-700'}`;
                 document.getElementById('ci-subtitle').textContent =
-                    `CI liquida ${data.today} · 24hs liquida ${data.settlement_24hs} (${data.days} día/s) · caución ${data.caucion_tna_pct ?? '-'}% TNA · tamaño USD ${data.params.trade_size_usd} · mínimo neto ${data.params.min_net_profit_pct}%`;
+                    `CI liquida ${data.today} · 24hs liquida ${data.settlement_24hs} (${data.days} día/s) · caución ${nv(data.caucion_tna_pct)}% TNA · tamaño USD ${nv(data.params.trade_size_usd)} · mínimo neto ${nv(data.params.min_net_profit_pct)}%`;
                 const rows = data.opportunities.filter(o => !hideThin || o.depth_ok).slice(0, 150);
-                const pct = v => (v === null || v === undefined) ? '-' : `${v.toFixed(3)}%`;
+                const pct = v => (v === null || v === undefined) ? '-' : `${nf(v, 3)}%`;
                 const dir = d => d === 'VENDER_CI_COMPRAR_24HS' ? 'Vender CI → comprar 24hs' : 'Comprar CI → vender 24hs';
-                document.getElementById('ci-table-body').innerHTML = rows.map(o => `
-                    <tr class="${o.signal ? 'bg-emerald-950/30' : ''}">
+                document.getElementById('ci-table-body').innerHTML = rows.map(o => {
+                    const key = `ci|${o.symbol}|${o.currency}|${o.direction}`;
+                    const notes = (o.notes || []).join(' ');
+                    const open = expandedRows.has(key);
+                    const coupon = o.coupon_status === 'AJUSTADO' ? nf(o.flow_adjustment, 4)
+                        : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : (o.coupon_status === 'CORTE_PROBABLE' ? '⚠ corte' : (o.coupon_status === 'AJUSTE_DUDOSO' ? '⚠ ajuste' : '-')));
+                    return `
+                    <tr class="${o.signal ? 'bg-emerald-950/30' : ''} ${notes ? 'cursor-pointer hover:bg-slate-800/60' : ''}" ${notes ? `onclick="toggleRowDetail(this, '${esc(key)}')"` : ''}>
                         <td class="px-3 py-1.5 text-white font-bold">${esc(o.symbol)} <span class="text-slate-500 font-normal">${esc(o.currency)}</span></td>
                         <td class="px-3 font-sans">${dir(o.direction)}</td>
-                        <td class="px-3 text-right text-rose-300">${o.sell_leg.price ?? '-'} <span class="text-slate-500">${esc(o.sell_leg.settlement)}</span></td>
-                        <td class="px-3 text-right text-emerald-300">${o.buy_leg.price ?? '-'} <span class="text-slate-500">${esc(o.buy_leg.settlement)}</span></td>
+                        <td class="px-3 text-right">${nv(o.sell_leg.price)} <span class="text-slate-500">${esc(o.sell_leg.settlement)}</span></td>
+                        <td class="px-3 text-right">${nv(o.buy_leg.price)} <span class="text-slate-500">${esc(o.buy_leg.settlement)}</span></td>
                         <td class="px-3 text-right">${o.nominal ? Math.round(o.nominal).toLocaleString('es-AR') : '-'}</td>
                         <td class="px-3 text-right">${pct(o.gross_pct)}</td>
-                        <td class="px-3 text-right text-slate-400">-${o.fees_pct.toFixed(2)}%</td>
-                        <td class="px-3 text-right text-slate-400">${o.direction === 'COMPRAR_CI_VENDER_24HS' ? '-' + o.carry_pct.toFixed(3) + '%' : '-'}</td>
-                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${o.coupon_status === 'AJUSTADO' ? o.flow_adjustment.toFixed(4) : esc(o.coupon_status === 'DESCONOCIDO' ? '¿?' : (o.coupon_status === 'CORTE_PROBABLE' ? '⚠ corte' : (o.coupon_status === 'AJUSTE_DUDOSO' ? '⚠ ajuste' : '-')))}</td>
+                        <td class="px-3 text-right text-slate-400">-${nf(o.fees_pct, 2)}%</td>
+                        <td class="px-3 text-right text-slate-400">${o.direction === 'COMPRAR_CI_VENDER_24HS' ? '-' + nf(o.carry_pct, 3) + '%' : '-'}</td>
+                        <td class="px-3 text-right ${o.coupon_status === 'AJUSTADO' ? 'text-amber-300' : 'text-slate-500'}">${coupon}</td>
                         <td class="px-3 text-right font-bold ${o.net_pct >= data.params.min_net_profit_pct ? 'text-emerald-400' : (o.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">${pct(o.net_pct)}</td>
-                        <td class="px-3 text-[10px] text-slate-400 font-sans whitespace-normal min-w-[260px]">${esc(o.notes.join(' '))}</td>
-                    </tr>`).join('') || '<tr><td colspan="11" class="py-8 text-center text-slate-500 font-sans">Sin datos de puntas para CI y 24hs.</td></tr>';
+                        <td class="px-3 font-sans text-slate-400">${notes ? `<span class="row-caret">${open ? '▾' : '▸'}</span>ver` : ''}</td>
+                    </tr>
+                    <tr class="${open ? '' : 'hidden'} bg-brand-dark/60"><td colspan="11" class="px-3 py-2 text-[11px] text-slate-400 font-sans whitespace-normal">${esc(notes)}</td></tr>`;
+                }).join('') || '<tr><td colspan="11" class="py-8 text-center text-slate-500 font-sans">Sin datos de puntas para CI y 24hs.</td></tr>';
             } catch (err) { console.error('Error CI scanner:', err); }
         }
 
@@ -963,9 +1038,9 @@
             try {
                 const data = await (await fetch(`/api/v1/arbitrage/fx-implied?kind=${fxKind}`)).json();
                 const money = v => v ? `$${v.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
-                const onTag = q => q.instrument === 'ON' ? ' <span class="px-1 rounded bg-violet-500/20 text-violet-300 text-[9px] font-sans">ON</span>' : '';
+                const onTag = q => q.instrument === 'ON' ? ' <span class="px-1 rounded bg-violet-500/20 text-violet-300 text-[11px] font-sans">ON</span>' : '';
                 const vsRef = q => q.vs_reference_pct === null || q.vs_reference_pct === undefined ? '<td class="text-right text-slate-600">-</td>'
-                    : `<td class="text-right ${q.vs_reference_pct < 0 ? 'text-emerald-400' : 'text-slate-500'}">${q.vs_reference_pct > 0 ? '+' : ''}${q.vs_reference_pct.toFixed(2)}%</td>`;
+                    : `<td class="text-right ${q.vs_reference_pct < 0 ? 'text-emerald-400' : 'text-slate-500'}">${q.vs_reference_pct > 0 ? '+' : ''}${nf(q.vs_reference_pct, 2)}%</td>`;
                 const row = (q, rate, withRef) => `<tr><td class="py-1.5 text-white">${esc(q.base)}${onTag(q)}</td>
                     <td class="text-slate-400">${esc(q.ars_symbol)} ${esc(q.ars_settlement)} / ${esc(q.usd_symbol)} ${esc(q.usd_settlement)}</td>
                     <td class="text-right font-bold">${money(rate)}</td>${withRef ? vsRef(q) : ''}
@@ -974,16 +1049,16 @@
                 document.getElementById('fx-sell-body').innerHTML = data.best_to_sell_usd.slice(0, 15).map(q => row(q, q.sell_usd_rate)).join('');
                 document.getElementById('fx-cable-body').innerHTML = (data.cable_to_mep || []).map(c => `
                     <tr><td class="py-1.5 text-white">${esc(c.base)}${onTag(c)}</td><td class="text-slate-400">${esc(c.cable_symbol)} → ${esc(c.mep_symbol)} · ${esc(c.settlement)}</td>
-                    <td class="text-right">${c.buy_price.toFixed(2)}</td><td class="text-right">${c.sell_price.toFixed(2)}</td>
-                    <td class="text-right font-bold ${c.net_pct > 0 ? 'text-emerald-400' : 'text-slate-500'}">${c.net_pct > 0 ? '+' : ''}${c.net_pct.toFixed(2)}%</td>
+                    <td class="text-right">${nf(c.buy_price, 2)}</td><td class="text-right">${nf(c.sell_price, 2)}</td>
+                    <td class="text-right font-bold ${c.net_pct > 0 ? 'text-emerald-400' : 'text-slate-500'}">${c.net_pct > 0 ? '+' : ''}${nf(c.net_pct, 2)}%</td>
                     <td class="text-right ${c.depth_ok ? 'text-emerald-400' : 'text-slate-500'}">${c.depth_ok ? 'OK' : 'baja'}</td></tr>`).join('')
                     || '<tr><td colspan="6" class="py-3 text-center text-slate-500 font-sans">Sin puntas en especie C y D para el mismo título.</td></tr>';
                 document.getElementById('fx-roundtrips').innerHTML = data.round_trips.map(t => `
                     <div class="p-4 rounded-xl border ${t.signal ? 'border-emerald-500/60 bg-emerald-950/20' : 'border-brand-border bg-brand-card'} text-xs space-y-1">
                         <div class="font-bold text-white">Ida y vuelta ${esc(t.kind)} · ${esc(t.settlement)}${t.instrument === 'ON' ? ' · <span class="text-violet-300">con ON</span>' : ''}</div>
                         <div class="font-mono">Comprar con <b>${esc(t.buy_with)}</b> a ${money(t.buy_usd_rate)} → vender con <b>${esc(t.sell_with)}</b> a ${money(t.sell_usd_rate)}</div>
-                        <div class="font-mono font-bold ${t.signal ? 'text-emerald-400' : (t.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">Neto ${t.net_pct.toFixed(3)}% (mínimo ${data.params.min_net_profit_pct}%)</div>
-                        <div class="text-[10px] text-slate-500">${esc(t.notes.join(' '))}</div>
+                        <div class="font-mono font-bold ${t.signal ? 'text-emerald-400' : (t.net_pct > 0 ? 'text-amber-300' : 'text-slate-500')}">Neto ${nf(t.net_pct, 3)}% (mínimo ${nv(data.params.min_net_profit_pct)}%)</div>
+                        <div class="text-[11px] text-slate-500">${esc(t.notes.join(' '))}</div>
                     </div>`).join('') || '<div class="text-xs text-slate-500">Sin datos suficientes para ida y vuelta.</div>';
             } catch (err) { console.error('Error FX:', err); }
         }
@@ -1001,11 +1076,12 @@
                 document.getElementById('on-ideas').innerHTML = onRv.swap_ideas.map(i => `
                     <div class="p-3 rounded-xl border border-emerald-500/40 bg-emerald-950/20 text-xs space-y-1">
                         <div class="font-bold text-white">${esc(i.issuer)}</div>
-                        <div class="font-mono">Vender <b>${esc(i.sell)}</b> (TIR ${i.sell_tir_pct.toFixed(2)}%, MD ${i.sell_md.toFixed(2)}) → comprar <b>${esc(i.buy)}</b> (TIR ${i.buy_tir_pct.toFixed(2)}%, MD ${i.buy_md.toFixed(2)})</div>
+                        <div class="font-mono">Vender <b>${esc(i.sell)}</b> (TIR ${nf(i.sell_tir_pct, 2)}%, MD ${nf(i.sell_md, 2)}) → comprar <b>${esc(i.buy)}</b> (TIR ${nf(i.buy_tir_pct, 2)}%, MD ${nf(i.buy_md, 2)})</div>
                         <div class="font-mono text-emerald-400 font-bold">${bps(i.net_bps)} contra la curva del emisor, neto de costos <span class="text-slate-400 font-normal">(diferencia de TIR ${bps(i.pickup_bps)}, costos ${bps(i.cost_bps)})</span></div>
-                        <div class="text-[10px] text-slate-500">${esc(i.notes.join(' '))}</div>
+                        <div class="text-[11px] text-slate-500">${esc(i.notes.join(' '))}</div>
                     </div>`).join('') || '<div class="text-xs text-slate-500">Sin ideas que superen 50 pb netos contra la curva del emisor con puntas de las dos ON.</div>';
                 renderOnTable();
+                fitTables();
             } catch (err) { console.error('Error ON:', err); }
         }
 
@@ -1013,7 +1089,7 @@
             if (!onRv) return;
             const search = (document.getElementById('on-search').value || '').trim().toUpperCase();
             const onlyLiquid = document.getElementById('on-only-liquid').checked;
-            const num = (v, d) => v === null || v === undefined ? '-' : v.toFixed(d);
+            const num = (v, d) => v === null || v === undefined ? '-' : nf(v, d);
             const bps = v => v === null || v === undefined ? '<span class="text-slate-600">-</span>'
                 : `<span class="${v >= 50 ? 'text-emerald-400 font-bold' : v <= -50 ? 'text-rose-400' : 'text-slate-300'}">${v > 0 ? '+' : ''}${Math.round(v)}</span>`;
             const rows = onRv.rows.filter(r => (!onlyLiquid || r.liquid)
@@ -1023,15 +1099,15 @@
                     <td class="px-3 py-1.5 text-white font-bold">${esc(r.ticker)}</td>
                     <td class="px-3 font-sans text-slate-300">${esc(r.issuer || '-')}</td>
                     <td class="px-3 text-right" title="${esc(r.price_symbol || '')} · ${r.source === 'BULLMARKET' ? 'Bull Market' : 'bonistas.com (demora)'}">${num(r.price, 3)} <span class="text-slate-500">${esc(r.dollar || '')}</span></td>
-                    <td class="px-3 text-right text-slate-400">${num(r.bid, 2)} / ${num(r.ask, 2)}${r.spread_pct !== null ? ` <span class="${r.liquid ? 'text-slate-500' : 'text-amber-400'}">(${r.spread_pct.toFixed(1)}%)</span>` : ''}</td>
-                    <td class="px-3 text-right text-emerald-400 font-bold">${num(r.tir_pct, 2)}%</td>
+                    <td class="px-3 text-right text-slate-400">${num(r.bid, 2)} / ${num(r.ask, 2)}${r.spread_pct !== null ? ` <span class="${r.liquid ? 'text-slate-500' : 'text-amber-400'}">(${nf(r.spread_pct, 1)}%)</span>` : ''}</td>
+                    <td class="px-3 text-right text-white font-semibold">${num(r.tir_pct, 2)}%</td>
                     <td class="px-3 text-right">${num(r.md, 2)}</td>
                     <td class="px-3 text-right">${bps(r.spread_vs_issuer_bps)}</td>
                     <td class="px-3 text-right">${bps(r.spread_vs_sovereign_bps)}</td>
                     <td class="px-3 text-right text-slate-500">${num(r.tir_bonistas_pct, 2)}</td>
                     <td class="px-3 font-sans text-slate-400">${esc(r.payment_currency || '-')}</td>
                     <td class="px-3 text-slate-400">${esc(r.maturity || '-')}</td>
-                    <td class="px-3 font-sans text-[10px] text-amber-300/90" title="${esc(r.flags.join(' '))}">${r.flags.length ? '⚠ ' + r.flags.length : ''}</td>
+                    <td class="px-3 font-sans text-[11px] text-amber-300/90" title="${esc(r.flags.join(' '))}">${r.flags.length ? '⚠ ' + r.flags.length : ''}</td>
                 </tr>`).join('') || '<tr><td colspan="12" class="text-center py-6 text-slate-500 font-sans">Sin ON para mostrar.</td></tr>';
         }
 
@@ -1175,7 +1251,7 @@
                         <div class="flex justify-between gap-2"><span class="font-bold ${color}">${esc(a.title)}</span>
                         <span class="text-slate-500 font-mono whitespace-nowrap">${fmt(a.timestamp)}</span></div>
                         <div class="text-slate-400 mt-0.5">${esc(a.message || '')}</div>
-                        <div class="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600 mt-1">${alertValidity(a)}${fresh}<span>${a.notified ? 'Notificada en Windows' : 'Solo en el panel'}</span></div>
+                        <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 mt-1">${alertValidity(a)}${fresh}<span>${a.notified ? 'Notificada en Windows' : 'Solo en el panel'}</span></div>
                     </div>`;
                 }).join('') || '<div class="p-4 text-slate-500">Sin alertas.</div>';
             } catch (err) { console.error('Error alertas:', err); }
@@ -1261,13 +1337,13 @@
                 const res = await fetch('/api/v1/macro');
                 if (!res.ok) return;
                 const data = await res.json();
-                if (data.DOLAR_BOLSA) document.getElementById('header-mep').innerText = `$${data.DOLAR_BOLSA.value.toFixed(2)}`;
-                if (data.DOLAR_CONTADOCONLIQUI) document.getElementById('header-ccl').innerText = `$${data.DOLAR_CONTADOCONLIQUI.value.toFixed(2)}`;
+                if (data.DOLAR_BOLSA) document.getElementById('header-mep').innerText = `$${nf(data.DOLAR_BOLSA.value, 2)}`;
+                if (data.DOLAR_CONTADOCONLIQUI) document.getElementById('header-ccl').innerText = `$${nf(data.DOLAR_CONTADOCONLIQUI.value, 2)}`;
                 const mayorista = data.A3500 || data.DOLAR_MAYORISTA;
-                if (mayorista) document.getElementById('header-oficial').innerText = `$${mayorista.value.toFixed(2)}`;
+                if (mayorista) document.getElementById('header-oficial').innerText = `$${nf(mayorista.value, 2)}`;
                 if (data.DOLAR_BOLSA && data.DOLAR_CONTADOCONLIQUI) {
                     const canje = ((data.DOLAR_CONTADOCONLIQUI.value / data.DOLAR_BOLSA.value) - 1.0) * 100.0;
-                    document.getElementById('header-canje').innerText = `${canje > 0 ? '+' : ''}${canje.toFixed(2)}%`;
+                    document.getElementById('header-canje').innerText = `${canje > 0 ? '+' : ''}${nf(canje, 2)}%`;
                 }
             } catch (err) {
                 console.error("Error fetching macro:", err);
@@ -1291,10 +1367,10 @@
                     const live = allQuotes.filter(q => q.live).length;
                     if (data.live_source === 'BULLMARKET') {
                         srcNote.innerHTML = `<span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 align-middle"></span>Precios en tiempo real de Bull Market (${live} instrumentos) · resto y métricas (TIR, paridad, MD) de bonistas.com · plazo 24hs`;
-                        srcNote.className = 'text-[11px] text-emerald-300/90';
+                        srcNote.className = 'w-full text-[11px] text-slate-400';
                     } else {
                         srcNote.textContent = 'Precios y métricas de bonistas.com · plazo 24hs. Iniciá la sesión de Bull Market para ver precios en tiempo real.';
-                        srcNote.className = 'text-[11px] text-amber-300/90';
+                        srcNote.className = 'w-full text-[11px] text-slate-500';
                     }
                 }
 
@@ -1312,7 +1388,7 @@
             if (!t) return 'Sin prueba histórica';
             const span = t.days && t.days < 200 ? `Últimas ${t.days} ruedas` : 'Último año';
             if (!t.signals) return `${span}: sin señales`;
-            return `${span}: ${t.wins}/${t.signals} ganaron, neto medio ${t.avg_net_pct >= 0 ? '+' : ''}${t.avg_net_pct.toFixed(2)}%`;
+            return `${span}: ${t.wins}/${t.signals} ganaron, neto medio ${t.avg_net_pct >= 0 ? '+' : ''}${nf(t.avg_net_pct, 2)}%`;
         }
         function bandOut(r) {
             return r.band_lower !== null && r.mid_ratio !== null && (r.mid_ratio <= r.band_lower || r.mid_ratio >= r.band_upper);
@@ -1321,12 +1397,19 @@
             if (r.band_lower === null) return (r.notes || []).join(' ');
             if (r.band_signal) {
                 const dir = r.band_signal === 'B_TO_A' ? `vender ${r.b}, comprar ${r.a}` : `vender ${r.a}, comprar ${r.b}`;
-                const net = `si vuelve a la media: ${r.expected_net_pct >= 0 ? '+' : ''}${r.expected_net_pct.toFixed(2)}% neto`;
+                const net = `si vuelve a la media: ${r.expected_net_pct >= 0 ? '+' : ''}${nf(r.expected_net_pct, 2)}% neto`;
                 return r.reliable ? `Fuera de banda: ${dir} (${net}). ${backtestText(r.backtest)}.`
                                   : `Fuera de banda (${dir}; ${net}), pero la banda no fue confiable en este par. ${backtestText(r.backtest)}.`;
             }
             if (bandOut(r)) return (r.notes || []).join(' ') || 'Fuera de banda.';
             return `Dentro de su banda. ${backtestText(r.backtest)}.`;
+        }
+
+        function bandChip(r) {
+            if (r.band_lower === null) return ['Sin banda', 'text-slate-500'];
+            if (r.band_signal && r.reliable) return ['Señal', 'text-emerald-400 font-bold'];
+            if (r.band_signal || bandOut(r)) return ['Fuera de banda', 'text-amber-300'];
+            return ['En banda', 'text-slate-400'];
         }
 
         async function fetchArbitrage() {
@@ -1374,26 +1457,26 @@
                             : '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="BYMA Open Data publica con 20 minutos de demora">Detectada · demora 20 min</span>';
                         const since = s.first_seen ? new Date(s.first_seen).toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'}) : '-';
                         const net = (s.net_profit_pct !== null && s.net_profit_pct !== undefined)
-                            ? `<span class="text-emerald-400 font-bold">Neto ${s.net_profit_pct.toFixed(2)}%</span>` : '';
+                            ? `<span class="text-emerald-400 font-bold">Neto ${nf(s.net_profit_pct, 2)}%</span>` : '';
                         return `
                         <div class="p-4 rounded-xl bg-brand-dark border border-emerald-500/50 shadow-lg relative overflow-hidden flex flex-col justify-between space-y-3">
                             <div class="flex items-center justify-between gap-2">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                                    ${esc(s.strategy_name.replace(/_/g, ' '))}
+                                <span class="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                    ${esc(labelOf(STRATEGY_LABELS, s.strategy_name))}
                                 </span>
-                                <span class="text-[11px] font-bold text-emerald-400 text-right">${esc(s.action_recommended.replace(/_/g, ' '))}</span>
+                                <span class="text-[11px] font-bold text-emerald-400 text-right">${esc(labelOf(ACTION_LABELS, s.action_recommended))}</span>
                             </div>
                             <div class="flex items-center justify-between text-sm font-mono font-bold text-white bg-brand-elevated/70 p-2.5 rounded-lg border border-brand-border">
                                 <span class="text-rose-400">Vender ${esc(s.leg_sell_ticker)}</span>
                                 <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
                                 <span class="text-emerald-400">Comprar ${esc(s.leg_buy_ticker)}</span>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-slate-400">
+                            <div class="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400">
                                 ${conf} <span>activa desde ${since}</span> ${net}
                             </div>
                             <p class="text-[11px] text-slate-300 leading-relaxed">${esc(s.notes || '')}</p>
                             ${isLeg ? `<button onclick="setupSwapFromSignal('${esc(s.leg_sell_ticker)}', '${esc(s.leg_buy_ticker)}')" class="w-full py-2 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition flex items-center justify-center gap-1.5 shadow-md">
-                                <i data-lucide="calculator" class="w-3.5 h-3.5"></i><span>Ejecutar en Simulador</span></button>` : ''}
+                                <i data-lucide="calculator" class="w-3.5 h-3.5"></i><span>Ver en el simulador</span></button>` : ''}
                         </div>`;
                     }).join('');
                 }
@@ -1402,14 +1485,21 @@
                 for (const [bodyId, rows] of [['curve-ratios-body', data.curve_ratios], ['pair-ratios-body', data.pair_ratios]]) {
                     const crBody = document.getElementById(bodyId);
                     if (!crBody || !rows) continue;
-                    const f = (v, d = 4) => (v === null || v === undefined) ? '-' : v.toFixed(d);
-                    crBody.innerHTML = rows.map(r => `
-                        <tr><td class="px-3 py-1.5 text-white">${esc(r.a)} / ${esc(r.b)}${r.reliable ? ' <span class="px-1 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-sans" title="La banda fue rentable en este par en la prueba histórica">banda confiable</span>' : ''}</td><td class="px-3 text-center text-slate-400">${esc(r.settlement)}</td>
+                    const f = (v, d = 4) => (v === null || v === undefined) ? '-' : nf(v, d);
+                    crBody.innerHTML = rows.map(r => {
+                        const key = `${bodyId}|${r.a}|${r.b}|${r.settlement}`;
+                        const open = expandedRows.has(key);
+                        const [chip, chipCls] = bandChip(r);
+                        return `
+                        <tr class="cursor-pointer hover:bg-slate-800/60" onclick="toggleRowDetail(this, '${esc(key)}')">
+                        <td class="px-3 py-1.5 text-white">${esc(r.a)} / ${esc(r.b)}${r.reliable ? ' <span class="px-1 rounded bg-emerald-500/20 text-emerald-300 text-[11px] font-sans" title="La banda fue rentable en este par en la prueba histórica">banda confiable</span>' : ''}</td><td class="px-3 text-center text-slate-400">${esc(r.settlement)}</td>
                         <td class="px-3 text-right">${f(r.mid_ratio)}</td><td class="px-3 text-right">${f(r.rotate_a_to_b)}</td>
-                        <td class="px-3 text-right">${f(r.rotate_b_to_a)}</td><td class="px-3 text-right ${bandOut(r) ? 'text-amber-300 font-bold' : ''}">${r.z_score === null ? '-' : r.z_score.toFixed(2)}</td>
+                        <td class="px-3 text-right">${f(r.rotate_b_to_a)}</td><td class="px-3 text-right ${bandOut(r) ? 'text-amber-300 font-bold' : ''}">${r.z_score === null ? '-' : nf(r.z_score, 2)}</td>
                         <td class="px-3 text-right text-slate-400">${r.band_lower === null ? '-' : f(r.band_lower) + ' – ' + f(r.band_upper)}</td>
                         <td class="px-3 text-right text-slate-400">${f(r.long_mean)}</td>
-                        <td class="px-3 text-[10px] text-slate-400 font-sans whitespace-normal min-w-[240px]">${esc(bandStatus(r))}</td></tr>`).join('')
+                        <td class="px-3 font-sans ${chipCls}"><span class="row-caret">${open ? '▾' : '▸'}</span>${chip}</td></tr>
+                        <tr class="${open ? '' : 'hidden'} bg-brand-dark/60"><td colspan="9" class="px-3 py-2 text-[11px] text-slate-400 font-sans whitespace-normal">${esc(bandStatus(r))}</td></tr>`;
+                    }).join('')
                         || '<tr><td colspan="9" class="py-4 text-center text-slate-500">Sin puntas para estos pares.</td></tr>';
                 }
 
@@ -1431,20 +1521,20 @@
                             <div class="p-3.5 rounded-xl bg-brand-dark border ${borderClass} space-y-2">
                                 <div class="flex items-center justify-between">
                                     <span class="font-bold text-xs text-white font-mono">${m.al_ticker} vs ${m.gd_ticker}</span>
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono ${badgeClass}">
-                                        Ratio: ${m.ratio ? m.ratio.toFixed(4) : '-'}
+                                    <span class="px-2 py-0.5 rounded text-[11px] font-mono ${badgeClass}">
+                                        Ratio: ${m.ratio ? nf(m.ratio, 4) : '-'}
                                     </span>
                                 </div>
                                 <div class="text-[11px] text-slate-400 font-mono flex justify-between">
-                                    <span>${m.al_ticker}: U$D ${m.price_al ? m.price_al.toFixed(2) : '-'}</span>
-                                    <span>${m.gd_ticker}: U$D ${m.price_gd ? m.price_gd.toFixed(2) : '-'}</span>
+                                    <span>${m.al_ticker}: U$D ${m.price_al ? nf(m.price_al, 2) : '-'}</span>
+                                    <span>${m.gd_ticker}: U$D ${m.price_gd ? nf(m.price_gd, 2) : '-'}</span>
                                 </div>
-                                <div class="text-[10px] text-slate-500 font-mono flex justify-between gap-2">
-                                    <span>Z: ${m.z_score === null || m.z_score === undefined ? '-' : m.z_score.toFixed(2)}</span>
-                                    <span>${m.band_lower == null ? 'Sin banda' : 'Banda 21r: ' + m.band_lower.toFixed(4) + ' – ' + m.band_upper.toFixed(4)}</span>
+                                <div class="text-[11px] text-slate-500 font-mono flex justify-between gap-2">
+                                    <span>Z: ${m.z_score === null || m.z_score === undefined ? '-' : nf(m.z_score, 2)}</span>
+                                    <span>${m.band_lower == null ? 'Sin banda' : 'Banda 21r: ' + nf(m.band_lower, 4) + ' – ' + nf(m.band_upper, 4)}</span>
                                 </div>
-                                <div class="text-[10px] text-slate-500 font-mono flex justify-between gap-2">
-                                    <span>${m.long_mean == null ? '' : 'Media 1 año: ' + m.long_mean.toFixed(4)}</span>
+                                <div class="text-[11px] text-slate-500 font-mono flex justify-between gap-2">
+                                    <span>${m.long_mean == null ? '' : 'Media 1 año: ' + nf(m.long_mean, 4)}</span>
                                     <span title="Prueba con cierres diarios del último año: señales de banda en este par, cuántas ganaron y neto medio después de 4 operaciones" class="${m.reliable ? 'text-emerald-400' : ''}">${m.band_lower == null ? '' : backtestText(m.backtest)}</span>
                                 </div>
                                 <p class="text-[11px] text-slate-300 border-t border-brand-border/60 pt-1.5">${esc(m.status_description)}</p>
@@ -1458,7 +1548,7 @@
                     const rv = data.relative_value_tramo_corto;
                     document.getElementById('rv-desc-text').innerText = rv.status_description;
                     const badge = document.getElementById('rv-badge');
-                    badge.innerText = `Spread: ${rv.spread_bps !== null ? rv.spread_bps + ' bps' : '--'}`;
+                    badge.innerText = `Diferencial: ${rv.spread_bps !== null ? rv.spread_bps + ' pb' : '--'}`;
                     if (rv.traffic_light === 'GREEN') {
                         badge.className = "px-4 py-2 rounded-xl text-xs font-mono font-bold bg-emerald-500 text-slate-950 border border-emerald-400";
                     }
@@ -1488,10 +1578,9 @@
 
         // ==================== TABLE FILTER & SORT ====================
         function updateFilterCounts() {
-            document.getElementById('cnt-all').innerText = allQuotes.length;
-            ['HARD_DOLLAR', 'ON'].forEach(t => {
-                const el = document.getElementById('cnt-' + t);
-                if (el) el.innerText = allQuotes.filter(q => q.bond_type === t).length;
+            document.querySelectorAll('#filter-buttons-group [data-count]').forEach(el => {
+                const t = el.dataset.count;
+                el.innerText = t === 'ALL' ? allQuotes.length : allQuotes.filter(q => q.bond_type === t).length;
             });
         }
 
@@ -1516,10 +1605,43 @@
             if (currentSort.column === column) {
                 currentSort.asc = !currentSort.asc;
             } else {
-                currentSort.column = column;
-                currentSort.asc = true;
+                // Texto: A→Z. Números: de mayor a menor en el primer clic
+                currentSort = { column, asc: TEXT_SORT_COLUMNS.includes(column) };
             }
+            localStorage.setItem('quotesSort', JSON.stringify(currentSort));
             renderQuotesTable();
+        }
+
+        function paintSortHeaders() {
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                const on = th.dataset.sort === currentSort.column;
+                th.classList.toggle('sorted', on);
+                th.querySelector('.sort-ind').textContent = on ? (currentSort.asc ? '▲' : '▼') : '';
+            });
+        }
+
+        // Las tablas largas ocupan lo que queda de pantalla: un solo scroll y el encabezado siempre a la vista
+        function fitTables() {
+            const header = document.querySelector('header');
+            const headerH = header ? header.offsetHeight : 0;
+            document.querySelectorAll('.fit-viewport').forEach(el => {
+                if (el.offsetParent === null) return;            // pestaña oculta
+                const top = el.getBoundingClientRect().top + window.scrollY;
+                const fromTop = window.innerHeight - top - 24;
+                const fromHeader = window.innerHeight - headerH - 24;
+                el.style.maxHeight = Math.max(320, fromTop >= window.innerHeight * 0.5 ? fromTop : fromHeader) + 'px';
+            });
+        }
+        window.addEventListener('resize', fitTables);
+
+        // Filas con detalle desplegable (notas largas): se recuerda cuáles están abiertas entre refrescos
+        const expandedRows = new Set();
+        function toggleRowDetail(tr, key) {
+            const open = !expandedRows.has(key);
+            if (open) expandedRows.add(key); else expandedRows.delete(key);
+            tr.nextElementSibling.classList.toggle('hidden', !open);
+            const caret = tr.querySelector('.row-caret');
+            if (caret) caret.textContent = open ? '▾' : '▸';
         }
 
         function renderQuotesTable() {
@@ -1549,6 +1671,8 @@
 
             if (list.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="11" class="text-center py-10 text-slate-500 font-sans">No hay bonos que coincidan con el criterio seleccionado.</td></tr>`;
+                paintSortHeaders();
+                fitTables();
                 return;
             }
 
@@ -1563,58 +1687,49 @@
                         + (d.time ? ` ${d.time}` : '')
                         + `&#10;Compra ${d.bid ?? '-'} · Venta ${d.ask ?? '-'} · Último ${d.last ?? '-'}`;
                 };
+                // El punto indica el origen del precio: verde = tiempo real, ámbar = medio entre puntas, gris = bonistas.com
                 const mark = ccy => src[ccy] === 'BULLMARKET'
                     ? `<span title="${liveTip(ccy)}" class="inline-block w-1.5 h-1.5 rounded-full ${det[ccy] && det[ccy].kind === 'PUNTA_MEDIA' ? 'bg-amber-400' : 'bg-emerald-400'} mr-1.5 align-middle"></span>`
                     : (src[ccy] ? `<span title="bonistas.com" class="inline-block w-1.5 h-1.5 rounded-full bg-slate-600 mr-1.5 align-middle"></span>` : '');
-                const pArs = q.price_ars ? mark('ARS') + `$${q.price_ars.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
-                // Letras y bonos en pesos cotizan en dólares por 1 VN (ej. 0.088): más decimales
-                const usd = v => `U$D ${v.toFixed(v < 1 ? 4 : v < 10 ? 3 : 2)}`;
-                const pMep = q.price_mep ? mark('MEP') + usd(q.price_mep) : '-';
-                const pCcl = q.price_ccl ? mark('CCL') + usd(q.price_ccl) : '-';
+                const none = '<span class="text-slate-600">-</span>';
+                const pArs = q.price_ars ? mark('ARS') + nf(q.price_ars, 2) : none;
+                // Letras y bonos en pesos cotizan en dólares por 1 VN (ej. 0,088): más decimales
+                const usd = v => nf(v, v < 1 ? 4 : v < 10 ? 3 : 2);
+                const pMep = q.price_mep ? mark('MEP') + usd(q.price_mep) : none;
+                const pCcl = q.price_ccl ? mark('CCL') + usd(q.price_ccl) : none;
                 const speciesTag = (q.species && q.species.length)
-                    ? `<div class="text-[10px] font-normal text-slate-500">${q.species.join(' · ')}</div>` : '';
-                const vt = q.technical_value ? q.technical_value.toFixed(2) : '-';
-                const parity = q.parity_percentage ? `${q.parity_percentage.toFixed(2)}%` : '-';
-                const tir = q.ytm_percentage ? `${q.ytm_percentage.toFixed(2)}%` : '-';
-                const tem = q.tem_percentage ? `${q.tem_percentage.toFixed(2)}%` : '-';
-                const md = q.modified_duration ? q.modified_duration.toFixed(2) : '-';
+                    ? `<div class="text-[11px] font-normal text-slate-500">${q.species.join(' · ')}</div>` : '';
+                const chg = q.day_difference;
+                const change = (chg === null || chg === undefined) ? none
+                    : `<span class="${chg > 0 ? 'text-emerald-400' : chg < 0 ? 'text-rose-400' : 'text-slate-400'}">${chg > 0 ? '+' : ''}${nf(chg * 100, 2)}%</span>`;
+                const parity = q.parity_percentage ? `${nf(q.parity_percentage, 2)}%` : none;
+                const tir = q.ytm_percentage ? `${nf(q.ytm_percentage, 2)}%` : none;
+                const tem = q.tem_percentage ? `${nf(q.tem_percentage, 2)}%` : none;
+                const md = q.modified_duration ? nf(q.modified_duration, 2) : none;
 
                 const rawName = q.full_name || q.name || q.ticker;
                 const cleanName = rawName.replace(/\s*\((?:Ley\s+)?(?:ARG|NY)\)/i, '');
-                const lawTag = q.law === 'NY'
-                    ? `<span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-sans">Ley NY</span>`
-                    : `<span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-sans">Ley ARG</span>`;
 
                 return `
                     <tr class="${bg} hover:bg-slate-800/80 transition-colors">
-                        <td class="px-3 py-2 font-bold text-white">${q.ticker}${speciesTag}</td>
+                        <td class="px-3 py-2"><button onclick="openCashflowModal('${q.ticker}')" class="tk-link" title="Abrir la ficha de ${q.ticker}">${q.ticker}</button>${speciesTag}</td>
                         <td class="px-3 py-2 font-sans text-slate-300 max-w-[220px] xl:max-w-[260px]">
-                            <div class="flex items-center gap-1.5 min-w-0" title="${esc(rawName)}">
-                                <span class="truncate min-w-0 font-medium">${esc(cleanName)}</span>
-                                ${lawTag}
-                            </div>
+                            <div class="truncate font-medium" title="${esc(rawName)}">${esc(cleanName)}</div>
                         </td>
-                        <td class="px-2.5 py-2 text-right text-slate-300">${pArs}</td>
-                        <td class="px-2.5 py-2 text-right font-bold text-emerald-400">${pMep}</td>
-                        <td class="px-2.5 py-2 text-right font-bold text-cyan-400">${pCcl}</td>
-                        <td class="px-2.5 py-2 text-right text-slate-400">${vt}</td>
-                        <td class="px-2.5 py-2 text-right font-semibold text-amber-300">${parity}</td>
-                        <td class="px-2.5 py-2 text-right font-bold text-emerald-400">${tir}</td>
+                        <td class="px-2.5 py-2 font-sans text-slate-400">${q.law === 'NY' ? 'NY' : (q.law === 'ARG' ? 'ARG' : '-')}</td>
+                        <td class="px-2.5 py-2 text-right text-slate-200">${pArs}</td>
+                        <td class="px-2.5 py-2 text-right text-slate-200">${pMep}</td>
+                        <td class="px-2.5 py-2 text-right text-slate-200">${pCcl}</td>
+                        <td class="px-2.5 py-2 text-right">${change}</td>
+                        <td class="px-2.5 py-2 text-right text-slate-300">${parity}</td>
+                        <td class="px-2.5 py-2 text-right font-semibold text-white">${tir}</td>
                         <td class="px-2.5 py-2 text-right text-slate-300">${tem}</td>
-                        <td class="px-2.5 py-2 text-right text-slate-300">${md}</td>
-                        <td class="px-3 py-2 text-center shrink-0">
-                            <div class="flex items-center justify-center gap-1.5">
-                                <button onclick="openCashflowModal('${q.ticker}')" class="px-2 py-1 rounded bg-brand-elevated hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-sans transition">
-                                    Ficha
-                                </button>
-                                <button onclick="prepareSwapForTicker('${q.ticker}')" class="px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 text-[11px] font-sans font-bold transition">
-                                    Swap
-                                </button>
-                            </div>
-                        </td>
+                        <td class="px-2.5 py-2 text-center text-slate-300">${md}</td>
                     </tr>
                 `;
             }).join('');
+            paintSortHeaders();
+            fitTables();
         }
 
         // ==================== YIELD CURVES (PLOTLY) ====================
@@ -1667,7 +1782,7 @@
             const isRegion = g.id === 'REGION';
             const yName = g.id === 'TASA_FIJA' ? 'TEM' : (g.id === 'CER' ? 'TIR real' : 'TIR');
             const showLabels = document.getElementById('curve-labels').checked;
-            const fmtX = v => byDays ? `${Math.round(v)} días` : `${v.toFixed(2)} años`;
+            const fmtX = v => byDays ? `${Math.round(v)} días` : `${nf(v, 2)} años`;
 
             paintDollarButtons();
             document.getElementById('curve-title').textContent = g.title + (USD_CURVES.includes(g.id) ? ` · TIR en ${curveDollar === 'CCL' ? 'dólar cable' : 'dólar MEP'}` : '');
@@ -1679,15 +1794,15 @@
                 const labels = showLabels && (!isRegion || se.name.startsWith('Argentina'));
                 const hover = se.points.map(p => [
                     `<b>${p.ticker}</b>${p.species !== p.ticker ? ' (' + p.species + ')' : ''}`,
-                    `${yName}: ${p.y.toFixed(2)}%`,
-                    p.tem !== null && g.id !== 'TASA_FIJA' && byDays ? `TEM: ${p.tem.toFixed(2)}%` : null,
-                    g.id === 'TASA_FIJA' && p.ytm !== null ? `TIREA: ${p.ytm.toFixed(2)}%` : null,
-                    p.md !== null ? `Duration: ${p.md.toFixed(2)} años` : null,
+                    `${yName}: ${nf(p.y, 2)}%`,
+                    p.tem !== null && g.id !== 'TASA_FIJA' && byDays ? `TEM: ${nf(p.tem, 2)}%` : null,
+                    g.id === 'TASA_FIJA' && p.ytm !== null ? `TIREA: ${nf(p.ytm, 2)}%` : null,
+                    p.md !== null ? `Duration: ${nf(p.md, 2)} años` : null,
                     p.days !== null ? `Vence: ${p.maturity} (${p.days} días)` : null,
                     p.price ? `Precio: ${p.price.toLocaleString('es-AR')}` : null,
-                    p.parity ? `Paridad: ${p.parity.toFixed(1)}%` : null,
-                    p.residual_bps !== null ? `Desvío vs curva: ${p.residual_bps > 0 ? '+' : ''}${p.residual_bps.toFixed(0)} pb` : null,
-                    p.spread_ust_bps !== null ? `Spread vs UST: ${p.spread_ust_bps} pb` : null,
+                    p.parity ? `Paridad: ${nf(p.parity, 1)}%` : null,
+                    p.residual_bps !== null ? `Desvío vs curva: ${p.residual_bps > 0 ? '+' : ''}${nf(p.residual_bps, 0)} pb` : null,
+                    p.spread_ust_bps !== null ? `Diferencial vs UST: ${p.spread_ust_bps} pb` : null,
                     `<span style="color:#64748b">Fuente: ${p.source}</span>`,
                 ].filter(Boolean).join('<br>'));
                 traces.push({
@@ -1710,7 +1825,7 @@
             });
 
             const layout = {
-                paper_bgcolor: '#0d1322', plot_bgcolor: '#070a12',
+                paper_bgcolor: '#0d1322', plot_bgcolor: '#070a12', separators: ',.',
                 font: { color: '#94a3b8', family: 'Plus Jakarta Sans' },
                 xaxis: { title: g.x_label, gridcolor: '#1e293b', zerolinecolor: '#334155', tickfont: { family: 'JetBrains Mono' },
  },
@@ -1725,7 +1840,7 @@
             const rows = [];
             g.series.forEach(se => se.points.forEach(p => rows.push({ ...p, serie: se.name, color: se.color })));
             const metric = isRegion ? 'spread_ust_bps' : 'residual_bps';
-            document.getElementById('curve-table-title').textContent = isRegion ? 'Spread contra Treasuries' : 'Desvío contra la curva';
+            document.getElementById('curve-table-title').textContent = isRegion ? 'Diferencial contra Treasuries' : 'Desvío contra la curva';
             document.getElementById('curve-table-sub').textContent = isRegion
                 ? 'TIR menos la curva de Treasuries a la misma duration (riesgo país por tramo).'
                 : 'En puntos básicos. Positivo = rinde más que sus vecinos (relativamente barato).';
@@ -1737,8 +1852,8 @@
             const tone = v => v === null ? 'text-slate-500' : (isRegion ? 'text-slate-200' : (v >= 50 ? 'text-emerald-400' : (v <= -50 ? 'text-rose-400' : 'text-slate-300')));
             document.getElementById('curve-table-body').innerHTML = [...withMetric, ...without].map(r => `
                 <tr><td class="py-1 pl-1"><span style="color:${r.color}">●</span> <span class="text-white">${esc(r.ticker.replace(/_/g, ' '))}</span></td>
-                <td class="text-right px-2 text-slate-400">${byDays ? Math.round(r.x) : r.x.toFixed(2)}</td>
-                <td class="text-right px-2">${r.y.toFixed(2)}%</td>
+                <td class="text-right px-2 text-slate-400">${byDays ? Math.round(r.x) : nf(r.x, 2)}</td>
+                <td class="text-right px-2">${nf(r.y, 2)}%</td>
                 <td class="text-right pr-3 pl-2 font-bold ${tone(r[metric])}">${r[metric] === null ? '-' : (r[metric] > 0 && !isRegion ? '+' : '') + Math.round(r[metric])}</td></tr>`).join('');
             document.getElementById('curve-excluded').innerHTML = g.excluded.length
                 ? `<b>Excluidos (${g.excluded.length}):</b> ` + g.excluded.map(e => `${esc(e.ticker)} (${esc(e.reason)})`).join(', ')
@@ -1768,22 +1883,21 @@
             else buySelect.value = 'AL30';
         }
 
+        // Los bonos se cargan ANTES de cambiar de pestaña: abrir la pestaña ya dispara el cálculo
         function setupSwapFromSignal(sell, buy) {
-            switchTab('tab-swap', document.getElementById('tab-btn-swap'));
             document.getElementById('swap-sell-ticker').value = sell;
             document.getElementById('swap-buy-ticker').value = buy;
-            triggerLiveSwap();
+            switchTab('tab-swap', document.getElementById('tab-btn-swap'));
         }
 
         function prepareSwapForTicker(ticker) {
-            switchTab('tab-swap', document.getElementById('tab-btn-swap'));
             const clean = ticker;
             document.getElementById('swap-sell-ticker').value = clean;
             if (clean === 'AL30') document.getElementById('swap-buy-ticker').value = 'GD30';
             else if (clean === 'GD30') document.getElementById('swap-buy-ticker').value = 'AL30';
             else if (clean === 'GD29') document.getElementById('swap-buy-ticker').value = 'AL30';
             else if (clean === 'AL29') document.getElementById('swap-buy-ticker').value = 'GD29';
-            triggerLiveSwap();
+            switchTab('tab-swap', document.getElementById('tab-btn-swap'));
         }
 
         function handleSwapSubmit(e) {
@@ -1791,7 +1905,10 @@
             triggerLiveSwap();
         }
 
+        let swapRequest = 0;
+
         async function triggerLiveSwap() {
+            const req = ++swapRequest;       // si llega otro pedido, la respuesta de este se descarta
             const sellTicker = document.getElementById('swap-sell-ticker').value;
             const buyTicker = document.getElementById('swap-buy-ticker').value;
             const numOr = (id, fallback) => {
@@ -1815,45 +1932,346 @@
                         byma_fee_pct: byma
                     })
                 });
+                if (req !== swapRequest) return;
                 if (!res.ok) {
                     let detail = `Error ${res.status}`;
                     try { detail = (await res.json()).detail || detail; } catch (_) {}
+                    if (req !== swapRequest) return;
                     errorBox.textContent = detail;
                     errorBox.classList.remove('hidden');
                     document.getElementById('swap-result-box').classList.add('hidden');
                     return;
                 }
-                errorBox.classList.add('hidden');
                 const data = await res.json();
+                if (req !== swapRequest) return;
+                errorBox.classList.add('hidden');
                 const cur = data.currency === 'ARS' ? 'AR$' : 'U$D';
 
                 document.getElementById('swap-result-box').classList.remove('hidden');
-                document.getElementById('swap-ratio-badge').innerText = `Ratio: ${data.nominal_expansion_ratio.toFixed(4)}`;
+                document.getElementById('swap-ratio-badge').innerText = `Ratio: ${nf(data.nominal_expansion_ratio, 4)}`;
                 document.getElementById('res-sell-net').innerText = `${cur} ${data.sell_net_proceeds.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                document.getElementById('res-buy-nominal').innerText = `${data.buy_nominal_acquired.toLocaleString('es-AR')} nom.`;
-                document.getElementById('res-yield-pickup').innerText = data.yield_pickup_bps !== null ? `${data.yield_pickup_bps > 0 ? '+' : ''}${data.yield_pickup_bps} bps` : '-';
-                document.getElementById('res-leftover').innerText = `${cur} ${data.cash_leftover.toFixed(2)}`;
+                const pick = data.buy_nominal_acquired - data.sell_nominal;
+                const pickPct = data.sell_nominal ? (data.buy_nominal_acquired / data.sell_nominal - 1) * 100 : 0;
+                document.getElementById('res-buy-nominal').innerText = `${data.buy_nominal_acquired.toLocaleString('es-AR')} nom. (${pick >= 0 ? '+' : ''}${pick.toLocaleString('es-AR')} · ${pickPct >= 0 ? '+' : ''}${nf(pickPct, 2)}%)`;
+                const srcName = { BULLMARKET: 'Bull Market, tiempo real', BYMA: 'BYMA, 20 min de demora', BONISTAS: 'bonistas.com' };
+                const legText = (verb, sym, price, kind, src, side) =>
+                    `${verb} <b class="text-white">${esc(sym)}</b> a ${nf(price, 2)} <span class="text-slate-500">(${kind === 'PUNTAS' ? `punta ${side}, promedio para tu cantidad` : 'último operado'} · ${srcName[src] || esc(src)})</span>`;
+                document.getElementById('res-prices').innerHTML =
+                    legText('Vendés', data.sell_symbol || data.sell_ticker, data.sell_price, data.sell_price_kind, data.sell_price_source, 'compradora')
+                    + ' · ' + legText('Comprás', data.buy_symbol || data.buy_ticker, data.buy_price, data.buy_price_kind, data.buy_price_source, 'vendedora');
+                const warn = document.getElementById('res-notes');
+                warn.innerHTML = (data.notes || []).map(n => `<div>${esc(n)}</div>`).join('');
+                warn.classList.toggle('hidden', !(data.notes || []).length);
+                document.getElementById('res-yield-pickup').innerText = data.yield_pickup_bps !== null ? `${data.yield_pickup_bps > 0 ? '+' : ''}${nf(data.yield_pickup_bps, 1)} pb` : '-';
+                document.getElementById('res-leftover').innerText = `${cur} ${nf(data.cash_leftover, 2)}`;
                 document.getElementById('res-summary-message').innerText = data.summary_message;
             } catch (err) {
                 console.error("Error running swap simulation:", err);
             }
         }
 
-        // ==================== CASHFLOW MODAL ====================
+        // ==================== FICHA DEL BONO ====================
+        let fichaReq = 0;
+        let fichaProfile = null;
+        let fichaHistory = null;
+        let fichaTab = 'price';
+        let fichaRange = localStorage.getItem('fichaRange') || '1A';
+        let fichaPair = 0;
+
+        const FICHA_TABS = [
+            { id: 'price', label: 'Precio' },
+            { id: 'ytm', label: 'TIR' },
+            { id: 'parity', label: 'Paridad' },
+            { id: 'pair', label: 'Ratio contra su par' },
+        ];
+        const FICHA_RANGES = { '3M': 92, '6M': 183, '1A': 365, '2A': 730, 'Todo': null };
+        const FICHA_TYPES = {
+            HARD_DOLLAR: 'Hard dollar', CER: 'CER', TASA_FIJA: 'Tasa fija', DUAL: 'Dual', TAMAR: 'TAMAR',
+            BOPREAL: 'BOPREAL', DOLLAR_LINKED: 'Dollar linked', ON: 'Obligación negociable',
+        };
+        const fNum = (v, d = 2) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+        const fDate = iso => iso ? new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-';
+        const fichaLoading = txt => `<div class="py-6 text-center text-slate-500 font-sans text-xs">${txt}</div>`;
+
         async function openCashflowModal(ticker) {
             activeModalTicker = ticker;
+            const req = ++fichaReq;
+            fichaProfile = null;
+            fichaHistory = null;
+            fichaTab = 'price';
+            fichaPair = 0;
             // Nombre completo (ON: "Mirgor. Clase IV. Tasa fija 8.25%. USD. Vto. 07-2027.") o denominación del bono
             const info = allQuotes.find(q => q.ticker === ticker || (q.species || []).includes(ticker));
             const desc = info ? (info.full_name || (info.name !== info.ticker ? info.name : null)) : null;
             document.getElementById('modal-ticker-title').innerText = desc
-                ? `${activeModalTicker} - ${desc}` : `${activeModalTicker} - Ficha Técnica y Flujo de Fondos`;
+                ? `${activeModalTicker} - ${desc}` : `${activeModalTicker} - Ficha`;
+            document.getElementById('ficha-chips').innerHTML = '';
+            document.getElementById('ficha-metrics').innerHTML = `<div class="col-span-full">${fichaLoading('Cargando ficha...')}</div>`;
+            document.getElementById('ficha-next-payment').classList.add('hidden');
+            document.getElementById('ficha-year').innerHTML = fichaLoading('Cargando historia...');
+            document.getElementById('ficha-sensitivity').innerHTML = fichaLoading('Cargando...');
+            document.getElementById('ficha-tabs').innerHTML = '';
+            document.getElementById('ficha-ranges').innerHTML = '';
+            document.getElementById('ficha-pairs').innerHTML = '';
+            document.getElementById('ficha-chart-notes').innerHTML = '';
+            if (typeof Plotly !== 'undefined') Plotly.purge('ficha-chart');
+            document.getElementById('ficha-chart').innerHTML = `<div class="ficha-msg">${fichaLoading('Descargando historia de precios (la primera vez del día puede tardar unos segundos)...')}</div>`;
             document.getElementById('cashflow-modal').classList.remove('hidden');
 
+            loadFichaCashflows(ticker, req);
+            loadFichaProfile(ticker, req);
+            loadFichaHistory(ticker, req);
+        }
+
+        async function loadFichaProfile(ticker, req) {
+            try {
+                const res = await fetch(`/api/v1/bonds/${encodeURIComponent(ticker)}/profile`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (req !== fichaReq) return;
+                fichaProfile = data;
+                renderFichaProfile();
+                if (fichaHistory) renderFichaChart();      // suma el punto de hoy
+            } catch (err) {
+                if (req !== fichaReq) return;
+                console.error('Ficha: perfil', err);
+                document.getElementById('ficha-metrics').innerHTML = `<div class="col-span-full py-4 text-center text-rose-400 font-sans text-xs">No se pudo cargar la ficha.</div>`;
+                document.getElementById('ficha-sensitivity').innerHTML = '';
+            }
+        }
+
+        async function loadFichaHistory(ticker, req) {
+            try {
+                const res = await fetch(`/api/v1/bonds/${encodeURIComponent(ticker)}/history`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (req !== fichaReq) return;
+                fichaHistory = data;
+                renderFichaYear();
+                renderFichaChart();
+            } catch (err) {
+                if (req !== fichaReq) return;
+                console.error('Ficha: historia', err);
+                document.getElementById('ficha-year').innerHTML = '<div class="text-slate-500 font-sans">Sin historia disponible.</div>';
+                document.getElementById('ficha-chart').innerHTML = `<div class="ficha-msg py-6 text-center text-rose-400 font-sans text-xs">No se pudo cargar la historia.</div>`;
+            }
+        }
+
+        function renderFichaProfile() {
+            const { context: c, quote: q, metrics: m, reference_metrics: r } = fichaProfile;
+            const chip = (label, value) => value ? `<span class="px-2 py-0.5 rounded-md bg-brand-elevated border border-brand-border text-slate-300"><span class="text-slate-500">${label}</span> ${esc(value)}</span>` : '';
+            document.getElementById('ficha-chips').innerHTML = [
+                chip('Tipo', FICHA_TYPES[c.bond_type] || c.bond_type),
+                chip('Ley', c.law === 'NY' ? 'Nueva York' : (c.law === 'ARG' ? 'Argentina' : c.law)),
+                chip('Flujos en', c.currency === 'USD' ? 'dólares' : (c.cer_adjusted ? 'pesos + CER' : 'pesos')),
+                chip('Emisión', c.issue_date ? fDate(c.issue_date) : null),
+                chip('Vence', c.maturity_date ? fDate(c.maturity_date) : null),
+                chip('Cupón vigente', c.coupon_pct !== null ? `${fNum(c.coupon_pct, 3)}% anual` : null),
+                chip('Pagos restantes', c.remaining_payments ? String(c.remaining_payments) : null),
+                chip('Especie', c.price_symbol),
+            ].join('');
+
+            const sym = c.currency === 'USD' ? 'U$D ' : '$';
+            const own = (a, b) => (a !== null && a !== undefined) ? [a, false] : [(b ?? null), b !== null && b !== undefined];
+            const tile = (label, value, sub = '', cls = 'text-white') => `
+                <div class="rounded-xl border border-brand-border bg-brand-dark/60 px-3 py-2.5">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-500 font-sans">${label}</div>
+                    <div class="text-base font-bold font-mono ${cls}">${value}</div>
+                    <div class="text-[11px] text-slate-500 font-sans min-h-[14px]">${sub}</div>
+                </div>`;
+            const ext = flag => flag ? 'dato de bonistas.com' : '';
+            const [ytm, ytmExt] = own(m.ytm_pct, r.ytm_pct);
+            const [parity, parExt] = own(m.parity_pct, r.parity_pct);
+            const [vt, vtExt] = own(m.technical_value, r.technical_value);
+            const md = r.modified_duration ?? m.modified_duration;
+            const chg = q.change_pct;
+            const priceSub = q.price === null ? 'sin precio'
+                : `${q.source === 'BULLMARKET' ? 'Bull Market, tiempo real' : 'bonistas.com'}`
+                  + (chg !== null ? ` · <span class="${chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${chg > 0 ? '+' : ''}${fNum(chg)}%</span>` : '');
+            const tiles = [
+                tile(`Precio ${esc(q.symbol)}`, q.price !== null ? `${sym}${fNum(q.price, q.price < 10 ? 4 : 2)}` : '-', priceSub, 'text-emerald-400'),
+                tile('Cierre anterior', q.prev_close !== null ? `${sym}${fNum(q.prev_close, q.prev_close < 10 ? 4 : 2)}` : '-', q.bid && q.ask ? `Compra ${fNum(q.bid)} · Venta ${fNum(q.ask)}` : ''),
+                tile(c.real_yield ? 'TIR real' : 'TIR', ytm !== null ? `${fNum(ytm)}%` : '-', ext(ytmExt) || (c.real_yield ? 'sobre CER' : 'efectiva anual'), 'text-cyan-300'),
+                tile('Duration modificada', md !== null && md !== undefined ? fNum(md) : '-', md ? `≈ ${fNum(md)}% de precio por cada punto de TIR` : ''),
+                tile('Paridad', parity !== null ? `${fNum(parity)}%` : '-', ext(parExt), 'text-amber-300'),
+                tile('Valor técnico', vt !== null ? `${sym}${fNum(vt)}` : '-', ext(vtExt)),
+            ];
+            if (m.residual_capital !== null) {
+                tiles.push(tile('Capital residual', `${fNum(m.residual_capital)}%`, 'del valor nominal original'));
+                tiles.push(tile('Intereses corridos', `${sym}${fNum(m.accrued_interest, 4)}`, `al ${fDate(m.settlement_date)}`));
+            } else if (r.tem_pct !== null && r.tem_pct !== undefined) {
+                tiles.push(tile('TEM', `${fNum(r.tem_pct)}%`, 'dato de bonistas.com'));
+            }
+            document.getElementById('ficha-metrics').innerHTML = tiles.join('');
+
+            const np = c.next_payment;
+            const box = document.getElementById('ficha-next-payment');
+            if (np) {
+                box.innerHTML = `<b>Próximo pago:</b> ${fDate(np.date)} (en ${np.days} días) · ${sym}${fNum(np.amount, 4)} por 100 VN`
+                    + (np.last_day_24hs ? ` · <b>Corte de cupón:</b> la última rueda para comprar en 24hs y cobrarlo es el ${fDate(np.last_day_24hs)}; desde la liquidación del ${fDate(np.ex_date)} cotiza sin el pago.` : ' · ya cotiza sin este pago.');
+                box.classList.remove('hidden');
+            }
+
+            const sens = m.sensitivity || [];
+            document.getElementById('ficha-sensitivity').innerHTML = sens.length ? `
+                <table class="w-full">
+                    <thead class="text-slate-500 text-[11px] uppercase font-sans"><tr>
+                        <th class="py-1 text-left">Si la TIR va a</th><th class="py-1 text-right">Precio</th><th class="py-1 text-right">Variación</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-brand-border/50">${sens.map(s => `
+                        <tr>
+                            <td class="py-1.5 text-slate-300">${fNum(s.ytm_pct)}% <span class="text-slate-500">(${s.shift_pp > 0 ? '+' : ''}${s.shift_pp} pp)</span></td>
+                            <td class="py-1.5 text-right text-slate-300">${sym}${fNum(s.price)}</td>
+                            <td class="py-1.5 text-right font-bold ${s.change_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${s.change_pct > 0 ? '+' : ''}${fNum(s.change_pct)}%</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`
+                : `<div class="text-slate-500 font-sans">${esc((c.notes || [])[0] || 'Sin flujos para calcular la sensibilidad.')}</div>`;
+        }
+
+        function renderFichaYear() {
+            const st = fichaHistory.stats || {};
+            const row = (label, s, unit, color, d = 2) => {
+                if (!s) return '';
+                const span = (s.max - s.min) || 1;
+                const pos = v => Math.max(0, Math.min(100, (v - s.min) / span * 100));
+                return `
+                    <div>
+                        <div class="flex items-baseline justify-between font-sans">
+                            <span class="text-slate-300 font-semibold">${label}</span>
+                            <span class="font-mono text-white">${fNum(s.current, d)}${unit} <span class="text-slate-500">· percentil ${fNum(s.percentile, 0)}</span></span>
+                        </div>
+                        <div class="relative h-2 mt-2 rounded-full bg-brand-elevated">
+                            <div class="absolute top-[-3px] w-px h-[14px] bg-slate-400" style="left:${pos(s.mean)}%" title="Promedio ${fNum(s.mean, d)}${unit}"></div>
+                            <div class="absolute rounded-full border-2 border-brand-card" style="left:calc(${pos(s.current)}% - 6px); top:-2px; width:12px; height:12px; background:${color}" title="Último cierre"></div>
+                        </div>
+                        <div class="flex justify-between mt-1.5 font-mono text-[11px] text-slate-500">
+                            <span>mín ${fNum(s.min, d)}${unit}</span><span>prom ${fNum(s.mean, d)}${unit}</span><span>máx ${fNum(s.max, d)}${unit}</span>
+                        </div>
+                    </div>`;
+            };
+            const real = fichaProfile && fichaProfile.context.real_yield;
+            const html = [
+                row(real ? 'TIR real' : 'TIR', st.ytm, '%', '#22d3ee'),
+                row('Paridad', st.parity, '%', '#fbbf24'),
+                row(`Precio ${esc(fichaHistory.symbol)}`, st.price, '', '#34d399'),
+            ].join('');
+            document.getElementById('ficha-year').innerHTML = html
+                || '<div class="text-slate-500 font-sans">Todavía no hay historia suficiente (menos de 20 ruedas).</div>';
+        }
+
+        function setFichaTab(id) { fichaTab = id; renderFichaChart(); }
+        function setFichaRange(id) { fichaRange = id; localStorage.setItem('fichaRange', id); renderFichaChart(); }
+        function setFichaPair(i) { fichaPair = i; renderFichaChart(); }
+
+        function renderFichaChart() {
+            const h = fichaHistory;
+            if (!h || typeof Plotly === 'undefined') return;
+            const available = { price: h.days.length > 0, ytm: !!h.ytm, parity: !!h.parity, pair: (h.pairs || []).length > 0 };
+            if (!available[fichaTab]) fichaTab = 'price';
+            const btn = (on, off) => `px-2.5 py-1 rounded-lg text-xs transition ${on ? 'font-bold bg-emerald-500 text-slate-950' : (off ? 'font-semibold bg-brand-elevated/40 text-slate-600 cursor-not-allowed' : 'font-semibold bg-brand-elevated text-slate-300 hover:bg-slate-700')}`;
+            document.getElementById('ficha-tabs').innerHTML = FICHA_TABS.map(t =>
+                `<button ${available[t.id] ? `onclick="setFichaTab('${t.id}')"` : 'disabled title="No disponible para este título"'} class="${btn(fichaTab === t.id, !available[t.id])}">${t.label}</button>`).join('');
+            document.getElementById('ficha-ranges').innerHTML = Object.keys(FICHA_RANGES).map(r =>
+                `<button onclick="setFichaRange('${r}')" class="${btn(fichaRange === r, false)}">${r}</button>`).join('');
+
+            const notes = [...(h.notes || [])];
+            const box = document.getElementById('ficha-chart');
+            const pairsBox = document.getElementById('ficha-pairs');
+            pairsBox.innerHTML = '';
+            if (!h.days.length) {
+                Plotly.purge(box);
+                box.innerHTML = `<div class="ficha-msg py-10 text-center text-slate-500 font-sans text-xs">Sin historia de precios para ${esc(h.symbol)}.</div>`;
+                document.getElementById('ficha-chart-notes').innerHTML = notes.map(n => `<div>${esc(n)}</div>`).join('');
+                return;
+            }
+            box.querySelectorAll('.ficha-msg').forEach(e => e.remove());
+
+            const span = FICHA_RANGES[fichaRange];
+            const lastDay = h.days[h.days.length - 1];
+            const cutoff = span ? new Date(new Date(lastDay + 'T12:00:00').getTime() - span * 864e5).toISOString().slice(0, 10) : '';
+            const sliceFrom = days => { const i = days.findIndex(d => d >= cutoff); return i < 0 ? days.length : i; };
+            const today = new Date().toLocaleDateString('en-CA');
+            const ctx = fichaProfile ? fichaProfile.context : null;
+            const sym = ctx && ctx.currency === 'USD' ? 'U$D ' : '$';
+            const traces = [];
+            const shapes = [];
+            let yaxis = {};
+            let firstDay = lastDay;
+
+            if (fichaTab === 'pair') {
+                const pairs = h.pairs;
+                if (fichaPair >= pairs.length) fichaPair = 0;
+                const p = pairs[fichaPair];
+                if (pairs.length > 1) {
+                    pairsBox.innerHTML = pairs.map((x, i) =>
+                        `<button onclick="setFichaPair(${i})" class="px-2 py-0.5 rounded-md text-[11px] font-mono border ${i === fichaPair ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10' : 'border-brand-border text-slate-400 hover:text-white'}">${x.symbol_b} / ${x.symbol_a}</button>`).join('');
+                }
+                const i0 = sliceFrom(p.days);
+                const x = p.days.slice(i0);
+                firstDay = x[0] || lastDay;
+                traces.push({ x, y: p.lower.slice(i0), mode: 'lines', line: { width: 0 }, hoverinfo: 'skip', showlegend: false });
+                traces.push({ x, y: p.upper.slice(i0), mode: 'lines', line: { width: 0 }, fill: 'tonexty', fillcolor: 'rgba(34,211,238,0.10)', name: `Banda (${p.band_days} ruedas ± ${p.band_k} desvíos)`, hoverinfo: 'skip' });
+                traces.push({ x, y: p.mean.slice(i0), mode: 'lines', line: { color: '#94a3b8', width: 1, dash: 'dash' }, name: 'Media de la banda', hovertemplate: 'media %{y:.4f}<extra></extra>' });
+                traces.push({ x, y: p.ratio.slice(i0), mode: 'lines', line: { color: '#22d3ee', width: 2 }, name: `${p.symbol_b} / ${p.symbol_a}`, hovertemplate: 'ratio %{y:.4f}<extra></extra>' });
+                yaxis = { tickformat: '.3f' };
+                notes.unshift(`Ratio de cierres ${p.symbol_b} / ${p.symbol_a}${p.flow_adjusted ? ', corregido por los pagos de cada bono' : ''}. Es la misma banda que usa el detector de ratios: fuera de la banda el par está desalineado contra sus últimas ${p.band_days} ruedas.`);
+            } else {
+                const i0 = sliceFrom(h.days);
+                const x = h.days.slice(i0);
+                firstDay = x[0] || lastDay;
+                const cfg = {
+                    price: { y: h.price, color: '#34d399', name: `Precio ${h.symbol}`, fmt: `${sym}%{y:,.2f}`, axis: { tickprefix: sym, tickformat: ',.2f' }, stats: null, todayValue: fichaProfile && fichaProfile.quote.price },
+                    ytm: { y: h.ytm, color: '#22d3ee', name: ctx && ctx.real_yield ? 'TIR real' : 'TIR', fmt: '%{y:.2f}%', axis: { ticksuffix: '%', tickformat: '.1f' }, stats: h.stats.ytm, todayValue: fichaProfile && fichaProfile.metrics.ytm_pct },
+                    parity: { y: h.parity, color: '#fbbf24', name: 'Paridad', fmt: '%{y:.2f}%', axis: { ticksuffix: '%', tickformat: '.1f' }, stats: h.stats.parity, todayValue: fichaProfile && fichaProfile.metrics.parity_pct },
+                }[fichaTab];
+                traces.push({ x, y: cfg.y.slice(i0), mode: 'lines', line: { color: cfg.color, width: 2 }, name: cfg.name, hovertemplate: `${cfg.fmt}<extra></extra>`, connectgaps: false });
+                if (cfg.todayValue && today > lastDay) {
+                    traces.push({ x: [today], y: [cfg.todayValue], mode: 'markers', marker: { color: cfg.color, size: 9, line: { color: '#f8fafc', width: 1.5 } }, name: 'Hoy', hovertemplate: `hoy ${cfg.fmt}<extra></extra>` });
+                }
+                yaxis = cfg.axis;
+                if (cfg.stats) {
+                    // Promedio, mínimo y máximo del último año, sobre el tramo de ese año que se ve
+                    const yearAgo = new Date(new Date(lastDay + 'T12:00:00').getTime() - 365 * 864e5).toISOString().slice(0, 10);
+                    const x0 = yearAgo > firstDay ? yearAgo : firstDay;
+                    const line = (v, dash, color) => shapes.push({ type: 'line', xref: 'x', yref: 'y', x0, x1: today, y0: v, y1: v, line: { color, width: 1, dash } });
+                    line(cfg.stats.mean, 'dash', '#94a3b8');
+                    line(cfg.stats.min, 'dot', '#475569');
+                    line(cfg.stats.max, 'dot', '#475569');
+                    notes.unshift(`Línea de guiones: promedio del último año (${fNum(cfg.stats.mean)}%). Punteadas: mínimo (${fNum(cfg.stats.min)}%) y máximo (${fNum(cfg.stats.max)}%).`);
+                }
+                const xEnd = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10);
+                const cuts = (h.payments || []).filter(p => p.ex_date >= firstDay && p.ex_date <= xEnd);
+                cuts.forEach(p => shapes.push({ type: 'line', xref: 'x', yref: 'paper', x0: p.ex_date, x1: p.ex_date, y0: 0, y1: 1, line: { color: p.upcoming ? '#f59e0b' : '#64748b', width: 1, dash: 'dot' } }));
+                if (cuts.length) notes.push('Líneas verticales: corte de cupón de cada pago (en naranja, el próximo). El precio baja ese día por el pago, no por el mercado.');
+                notes.push(fichaTab === 'price'
+                    ? `Cierres diarios de ${h.symbol} (Rava).`
+                    : `Calculado con el cierre de cada rueda de ${h.symbol} (Rava) y los flujos que el bono tenía por delante ese día.`);
+            }
+
+            const layout = {
+                paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: '#070a12', separators: ',.',
+                font: { color: '#94a3b8', family: 'Plus Jakarta Sans', size: 11 },
+                xaxis: { type: 'date', gridcolor: '#1e293b', tickfont: { family: 'JetBrains Mono' }, rangebreaks: [{ bounds: ['sat', 'mon'] }],
+                         range: [firstDay, new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10)] },
+                yaxis: { gridcolor: '#1e293b', zerolinecolor: '#334155', tickfont: { family: 'JetBrains Mono' }, ...yaxis },
+                legend: { orientation: 'h', y: 1.12, x: 0, font: { color: '#cbd5e1', size: 11 } },
+                hovermode: 'x unified',
+                hoverlabel: { bgcolor: '#0f172a', bordercolor: '#334155', font: { family: 'JetBrains Mono', size: 11 } },
+                margin: { l: 62, r: 16, t: 28, b: 36 },
+                shapes,
+            };
+            Plotly.react(box, traces, layout, { responsive: true, displayModeBar: false });
+            document.getElementById('ficha-chart-notes').innerHTML = notes.map(n => `<div>${esc(n)}</div>`).join('');
+        }
+
+        async function loadFichaCashflows(ticker, req) {
             const tbody = document.getElementById('modal-cashflows-body');
             tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">Cargando flujos de fondos...</td></tr>`;
 
             try {
-                const res = await fetch(`/api/v1/bonds/${encodeURIComponent(activeModalTicker)}/cashflows`);
+                const res = await fetch(`/api/v1/bonds/${encodeURIComponent(ticker)}/cashflows`);
+                if (req !== fichaReq) return;
                 if (res.status === 422 || res.status === 404) {
                     let detail = 'Cronograma no disponible para este título.';
                     try { detail = (await res.json()).detail || detail; } catch (_) {}
@@ -1867,6 +2285,7 @@
                 }
                 if (!res.ok) throw new Error("Cashflow API error");
                 const cfs = await res.json();
+                if (req !== fichaReq) return;
 
                 if (cfs.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-500">No hay cronogramas futuros pendientes para este título.</td></tr>`;
@@ -1874,7 +2293,7 @@
                 }
 
                 const sym = cfs[0].currency === 'USD' ? 'U$D ' : '$';
-                const money = (v, d) => (v === null || v === undefined) ? '-' : `${sym}${v.toFixed(d)}`;
+                const money = (v, d) => (v === null || v === undefined) ? '-' : `${sym}${nf(v, d)}`;
                 const notes = {
                     COMPARARBONOS: 'Fuente: CompararBonos (flujo total por 100 VN; para CER, ajustado por el CER vigente).',
                     BULLMARKET: `Fuente: Bull Market (cronograma por 100 VN, ${cfs[0].currency === 'USD' ? 'en dólares' + ({CCL: ', pago en dólar cable', MEP: ', pago en dólar MEP'}[cfs[0].payment_currency] || '') : 'en pesos'}). Residual: capital que queda después de cada pago.`,
@@ -1893,6 +2312,7 @@
                     </tr>
                 `).join('') + sourceNote;
             } catch (err) {
+                if (req !== fichaReq) return;
                 console.error("Error loading cashflows:", err);
                 tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-rose-400">Error al cargar cronograma de flujos.</td></tr>`;
             }
@@ -1947,6 +2367,7 @@
 
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && !document.getElementById('guide-modal').classList.contains('hidden')) closeGuide();
+            else if (e.key === 'Escape' && !document.getElementById('cashflow-modal').classList.contains('hidden')) closeModal();
         });
 
         function closeModal() {

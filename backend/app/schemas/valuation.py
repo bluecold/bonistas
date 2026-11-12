@@ -92,4 +92,14 @@ class SwapResponse(BaseModel):
     summary_message: str
     currency: str = "USD"
     settlement: str = "24HS"
+    # De dónde salen los precios de cada pata: 'PUNTAS' (libro) o 'ULTIMO' (último operado)
+    sell_symbol: Optional[str] = None
+    buy_symbol: Optional[str] = None
+    sell_price_kind: str = "ULTIMO"
+    buy_price_kind: str = "ULTIMO"
+    sell_price_source: str = "BONISTAS"
+    buy_price_source: str = "BONISTAS"
+    sell_depth_ok: Optional[bool] = None
+    buy_depth_ok: Optional[bool] = None
+    notes: List[str] = []
 

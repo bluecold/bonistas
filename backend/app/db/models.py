@@ -237,6 +237,18 @@ class DailyClose(Base):
     fetched_at = Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc))
 
 
+class IndexDaily(Base):
+    """
+    Serie diaria de un índice (hoy: CER del BCRA), para recalcular flujos ajustados en fechas
+    pasadas (TIR y paridad históricas de la ficha). Se completa a demanda.
+    """
+    __tablename__ = "index_daily"
+
+    name = Column(String(20), primary_key=True)       # 'CER'
+    day = Column(Date, primary_key=True)
+    value = Column(Float, nullable=False)
+
+
 class BondFlowLog(Base):
     """
     Pagos (renta + amortización, por 100 VN) de los bonos cuyos ratios se ajustan por cupón:

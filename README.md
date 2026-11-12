@@ -4,7 +4,10 @@ Monitor local para detectar **desarbitrajes en bonos soberanos argentinos**, con
 
 - diferencias entre **Contado Inmediato y 24hs** de la misma especie, con el **corte de cupón** descontado;
 - el **dólar MEP / CCL implícito ejecutable** de cada bono y las idas y vueltas pesos ↔ dólares entre bonos;
-- desvíos en los **ratios AL/GD** (ley local vs. Nueva York) y entre bonos de la curva.
+- desvíos en los **ratios AL/GD** (ley local vs. Nueva York) y entre bonos de la curva;
+- **obligaciones negociables** que rinden de más o de menos contra las otras ON de su emisor.
+
+Además tiene una **ficha por bono** (contexto, sensibilidad a la TIR e historia de precio, TIR y paridad) y un **simulador de swaps** que calcula con las puntas, como el broker.
 
 Cuando aparece una oportunidad que supera la ganancia neta mínima, avisa con una **notificación de Windows** y en el **dashboard**.
 
@@ -27,7 +30,10 @@ Cuando aparece una oportunidad que supera la ganancia neta mínima, avisa con un
 | **Tiempo real** | Puntas de **BYMA Open Data**, con 20 min de demora, y, opcionalmente, de **Bull Market** en tiempo real con 5 niveles, usando la sesión del propio usuario. Cada señal indica de dónde salieron sus precios: *confirmada en tiempo real*, *parcial* o *demora 20 min*. |
 | **Alertas** | Notificación de Windows y panel en el dashboard para oportunidades nuevas, oportunidades confirmadas en tiempo real, sesión vencida y fuentes caídas, con un período de silencio contra las puntas que oscilan. |
 | **Curvas** | Por familia: soberanos USD (Bonares vs Globales y BOPREAL), tasa fija (TEM vs. días), CER (TIR real), provinciales, dollar linked y TAMAR/duales. Cada una tiene su curva ajustada y el **desvío de cada bono en puntos básicos** (cuánto rinde de más o de menos que sus vecinos). Incluye **Argentina vs. región** con el spread contra Treasuries por tramo. La TIR de los bonos en dólares se puede ver **en MEP o en cable**. |
-| **Analítica** | TIR, duration modificada, valor técnico, paridad, breakeven de inflación (tasa fija vs. CER) y simulador de swaps entre bonos. |
+| **Ficha del bono** | Tocando el ticker en el monitor: tipo, ley, moneda de pago, emisión, vencimiento, cupón vigente, precio y cierre anterior, TIR, duration, paridad, valor técnico, residual, intereses corridos, próximo pago con su **corte de cupón**, posición contra los últimos 365 días (percentil), **sensibilidad del precio a la TIR** (±1/2/3, +5 y +10 puntos) y gráficos de **precio, TIR, paridad y ratio contra su par** (con la banda del motor), de 3 meses a toda la historia. La historia revalúa cada cierre diario con los flujos que el bono tenía por delante ese día. |
+| **ON: valor relativo** | TIR y duration de cada ON en dólares con precio y cronograma de Bull Market, desvío contra las otras ON de su emisor y contra la curva soberana, e ideas de canje dentro del mismo emisor netas de costos. Informativo, sin alertas. |
+| **Simulador de swaps** | Nominales que se obtienen al rotar de un bono a otro y cambio de TIR y duration. Calcula como el broker: **vende a la punta compradora y compra a la vendedora**, recorriendo el libro para la cantidad indicada (Bull Market en tiempo real; si no, BYMA con demora; sin puntas, el último operado con aviso). Muestra los precios usados y su fuente. Se abre directo desde una señal o desde la ficha. |
+| **Analítica** | TIR, duration modificada, valor técnico, paridad y breakeven de inflación (tasa fija vs. CER). |
 | **Parámetros** | Costo por operación (0,11% todo incluido), ganancia neta mínima (0,40%) y tamaño de operación, **editables desde el dashboard**. |
 
 ---
@@ -61,13 +67,29 @@ Qué bono conviene para comprar o vender dólares MEP / cable, y si una ida y vu
 
 ![Dólar implícito](docs/screenshots/dolar-implicito.jpg)
 
-### Command Center
-Parámetros operativos, conexión con Bull Market en tiempo real, señales activas y matriz de prima de legislación AL/GD.
+### Arbitrajes
+Parámetros operativos, conexión con Bull Market en tiempo real, señales activas (con botón para llevarlas al simulador) y matriz de prima de legislación AL/GD.
 
-![Command Center](docs/screenshots/command-center.jpg)
+![Arbitrajes](docs/screenshots/arbitrajes.jpg)
 
 ### Ratios entre bonos de la curva
+Cada par con su banda propia (21 ruedas ± 1,5 desvíos). Tocando una fila se ve la lectura completa: qué rotar, cuánto deja volver a la media y cómo le fue a la banda en ese par el último año.
+
 ![Ratios](docs/screenshots/ratios.jpg)
+
+### Ficha del bono
+Se abre tocando el ticker en el monitor. Contexto, métricas al precio actual, próximo pago y corte de cupón, posición contra el último año y sensibilidad del precio a la TIR.
+
+![Ficha del bono](docs/screenshots/ficha.jpg)
+
+Historia de precio, TIR, paridad y ratio contra su par, con los cortes de cupón marcados, y el flujo de fondos pendiente.
+
+![Historia en la ficha](docs/screenshots/ficha-historia.jpg)
+
+### ON: valor relativo
+Ideas de canje entre obligaciones negociables del mismo emisor y tabla de TIR, duration y desvío contra el emisor y el soberano.
+
+![ON valor relativo](docs/screenshots/on-valor-relativo.jpg)
 
 ### Alertas
 Historial de avisos y preferencias de notificación: notificaciones de Windows, solo confirmadas en tiempo real y aviso de fuentes caídas.
@@ -75,14 +97,16 @@ Historial de avisos y preferencias de notificación: notificaciones de Windows, 
 ![Alertas](docs/screenshots/alertas.jpg)
 
 ### Guía de uso integrada
-Tocando el logo se abre una guía con el objetivo de la app, los primeros pasos, qué hace cada herramienta, cómo leer una señal, un glosario y las fuentes y límites. Se muestra sola la primera vez.
+Con el botón **?** del encabezado se abre una guía con el objetivo de la app, los primeros pasos, qué hace cada herramienta, cómo leer una señal, un glosario y las fuentes y límites. Se muestra sola la primera vez.
 
 ![Guía de uso](docs/screenshots/guia.jpg)
 
 ### Simulador de swaps
+Precios ejecutables para la cantidad indicada, con su fuente, y el resultado en nominales y en porcentaje.
+
 ![Simulador de swaps](docs/screenshots/simulador-swaps.jpg)
 
-> Las capturas son del cierre del 04/11/2026, con el mercado cerrado: por eso no hay señales activas.
+> Capturas del 12/11/2026 con la rueda abierta y Bull Market en tiempo real.
 
 ---
 
@@ -111,7 +135,7 @@ Después repite el ciclo **cada 60 segundos, solo en el horario de renta fija (1
 ### Bull Market en tiempo real (opcional)
 1. Iniciá sesión en Bull Market en el navegador y abrí *Cotizaciones → Bonos*.
 2. F12 → **Red** → buscá la petición `GetStockPrices` → copiá el encabezado `cookie` (o "Copiar como cURL").
-3. Pegalo en el panel **Bull Market · tiempo real** del Command Center y tocá **Guardar y probar**. Tiene que ser el encabezado completo (`nombre=valor; nombre2=valor2; …`), no el valor de una sola cookie.
+3. Pegalo en el panel **Bull Market · tiempo real** de la pestaña Arbitrajes y tocá **Guardar y probar**. Tiene que ser el encabezado completo (`nombre=valor; nombre2=valor2; …`), no el valor de una sola cookie.
 
 Con la sesión activa, la app consulta las puntas cada minuto durante la rueda y, una vez por día, los **cronogramas de pago** de todos los bonos. En la práctica, el polling mantiene viva la sesión.
 
@@ -150,9 +174,9 @@ Lista completa en [PROJECT_CONTEXT.md §7](PROJECT_CONTEXT.md).
 | [CompararBonos](https://compararbonos.com.ar) | Flujos de fondos y especies de cada bono | Diario |
 | [Bruno618](https://bruno618.com/herramientas/flujo-de-fondos-renta-fija) | Cronogramas de provinciales en dólares | Diario |
 | [Mercados Argentina](https://mercadosargentina.com.ar/renta-fija/titulos) | Cronogramas de provinciales (verificación por consenso) | Diario |
-| [API del BCRA](https://www.bcra.gob.ar) | CER, TAMAR, A3500 | Diario |
+| [API del BCRA](https://www.bcra.gob.ar) | CER (también su serie histórica, para la TIR histórica de los CER en la ficha), TAMAR, A3500 | Diario |
 | [MAE Market Data](https://api.marketdata.mae.com.ar/api/mercado/feriados) | Feriados de mercado (Argentina y EE.UU.) | Diario |
-| [Rava](https://www.rava.com) | Cierres diarios históricos de los bonos con ratio: soberanos en dólares, CER cupón cero, DICP/DIP0, TX31 y AO28/AO29/AN29 (bandas de los ratios entre bonos) | Diario |
+| [Rava](https://www.rava.com) | Cierres diarios históricos de los bonos con ratio: soberanos en dólares, CER cupón cero, DICP/DIP0, TX31 y AO28/AO29/AN29 (bandas de los ratios entre bonos); y de cualquier bono al abrir su ficha | Diario |
 | [DolarAPI](https://dolarapi.com) | Dólar MEP, CCL, oficial | — |
 
 Las cotizaciones se consultan una vez por minuto en horario de rueda, y solo se guarda un registro nuevo cuando el dato cambió. Las fuentes de referencia y cronogramas se consultan una vez por día, de a una página por vez y con pausas.
@@ -170,13 +194,16 @@ backend/
     │   ├── market_view.py      # Libros por especie/plazo, prioridad de fuentes, cupones entre liquidaciones
     │   ├── ci_24hs.py          # Detector CI vs 24hs
     │   ├── fx_implied.py       # Dólar implícito e ida y vuelta
-    │   ├── ratios.py           # Ratios AL/GD y de curva, z-score histórico
+    │   ├── ratios.py           # Ratios AL/GD y de curva, bandas con historia de Rava
+    │   ├── on_relative_value.py # ON: TIR contra su emisor y el soberano, ideas de canje
     │   └── engine.py           # Orquestación, señales persistentes, Command Center
     ├── data/                   # Clientes: BYMA, Bull Market, Bonistas, CompararBonos, Bruno618,
-    │                           #   Mercados Argentina, BCRA, MAE, DolarAPI
+    │                           #   Mercados Argentina, BCRA, MAE, DolarAPI, Rava
     ├── quant/                  # Flujos, TIR, duration, valor técnico, swaps
     ├── services/               # Ingesta, libros, referencia y consenso de cronogramas, curvas,
-    │                           #   calendario y feriados, sesión Bull Market, alertas, notificador
+    │                           #   calendario y feriados, sesión Bull Market, alertas, notificador,
+    │                           #   historia diaria (Rava/BCRA), ficha del bono (bond_profile_service),
+    │                           #   precios ejecutables del simulador (swap_pricing), cronogramas de ON
     ├── db/                     # Modelos SQLAlchemy y migraciones mínimas
     └── static/index.html       # Dashboard (Tailwind + Plotly)
 ```
@@ -189,12 +216,12 @@ backend/
 .\.venv\Scripts\pytest backend/tests -q
 ```
 
-250 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
+314 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
 
 ---
 
 ## 🛣️ Próximas versiones
 
-Acciones y Merval, CEDEARs, obligaciones negociables, detector de "gangas" y alertas por Telegram. Ver [PROJECT_CONTEXT.md §6.1](PROJECT_CONTEXT.md).
+Acciones y Merval, CEDEARs, detector de "gangas" y alertas por Telegram. Ver [PROJECT_CONTEXT.md §6.1](PROJECT_CONTEXT.md).
 
 Para el detalle de las decisiones financieras y técnicas, y el registro de cambios de la v1.1, ver [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md).

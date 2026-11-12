@@ -2,7 +2,7 @@
 
 > **Documento de memoria y contexto para agentes de IA y desarrolladores.**
 > Resume el propósito, el estado actual (v1.1), las decisiones de diseño financieras y técnicas, las particularidades del mercado argentino y la hoja de ruta. El detalle cronológico de cada cambio está en la §8.
-> Última actualización: 2026-11-05.
+> Última actualización: 2026-11-12.
 
 ---
 
@@ -13,7 +13,9 @@ Herramienta **personal** (corre en la PC del trader) para detectar **desarbitraj
 1. **CI vs 24hs** de la misma especie, descontando costos, caución y **corte de cupón**.
 2. **Dólar implícito** (MEP / CCL) ejecutable por bono e **idas y vueltas** pesos ↔ dólares entre bonos.
 3. **Ratios** AL/GD (ley local vs NY) y entre bonos de la curva.
-4. **Valor relativo** sobre curvas por familia (desvío de cada bono contra su curva ajustada).
+4. **Valor relativo** sobre curvas por familia (desvío de cada bono contra su curva ajustada) y entre obligaciones negociables del mismo emisor (informativo).
+
+Herramientas de análisis: **ficha del bono** (contexto, sensibilidad e historia de precio / TIR / paridad / ratio) y **simulador de swaps** con precios ejecutables.
 
 Avisa por **notificación de Windows** y en el **dashboard**. **No ejecuta órdenes** ni es asesoramiento financiero.
 
@@ -21,7 +23,7 @@ Avisa por **notificación de Windows** y en el **dashboard**. **No ejecuta órde
 * Broker: **Bull Market**. Costo **0,11% por operación, todo incluido** (0,22% ida y vuelta).
 * Ganancia neta mínima **0,40%** y tamaño **USD 500** (editables en el dashboard, tabla `user_settings`).
 * Polling cada **60 s**, solo en horario de rueda.
-* Alcance v1.1: **solo bonos** (soberanos, subsoberanos, BOPREAL, LECAP/BONCAP, CER, DL, TAMAR, duales). Acciones, CEDEARs, ONs y "gangas" quedan para después (§6.1).
+* Alcance v1.1: **bonos** (soberanos, subsoberanos, BOPREAL, LECAP/BONCAP, CER, DL, TAMAR, duales) y **ON en dólares** solo como valor relativo e idas y vueltas MEP/CCL (sin señales CI vs 24hs ni ratios). Acciones, CEDEARs y "gangas" quedan para después (§6.1).
 
 ---
 
@@ -36,7 +38,8 @@ Avisa por **notificación de Windows** y en el **dashboard**. **No ejecuta órde
 | CompararBonos | `data/comparar_bonos_client.py` | Flujos, especies y clasificación (`tipo`) de cada bono, soberanos de la región y UST | Diario 10:15 ART |
 | Bruno618 | `data/bruno618_client.py` | Cronogramas de 18 provinciales en USD | Diario |
 | Mercados Argentina | `data/mercados_argentina_client.py` | Cronogramas de 16 provinciales (incl. SJO35) | Diario, 1 s entre pedidos |
-| BCRA | `data/bcra_client.py` | CER (var. 30), TAMAR (44), A3500 (5) | Diario |
+| BCRA | `data/bcra_client.py` | CER (var. 30), TAMAR (44), A3500 (5); serie histórica del CER (`fetch_series`, tabla `index_daily`) para la ficha | Diario |
+| Rava | `data/rava_client.py` | Cierres diarios históricos (CSV, sin sesión): bandas de los ratios y gráficos de la ficha | 1 vez por día por especie |
 | MAE | `data/mae_client.py` | Próximos feriados (Argentina y EE.UU.) | Diario y al iniciar |
 | DolarAPI / ArgentinaDatos | `data/dolar_api_client.py`, `macro_connectors.py` | MEP/CCL de referencia, IPC | Cada 60 s / diario |
 
@@ -53,6 +56,8 @@ Rava: descartada para cotizaciones en vivo, pero su descarga de históricos diar
 * `data/rava_client.py` + `services/price_history_service.py` + tabla `daily_closes`: historia diaria de las especies de los pares (D en los pares en dólares, pesos en los CER) (`rava.com/perfil/descarga-historicos/<especie>`, CSV sin sesión), una descarga por día (al iniciar y con la referencia de las 10:15), 1,5 s entre pedidos.
 * `engine.py`: concilia señales persistentes (clave `estrategia|venta|compra|acción`), confirmación por fuente de las patas (`TIEMPO_REAL` / `PARCIAL` / `DEMORA_20MIN`), Command Center y listeners de alertas.
 * `strategies.py`: prima de legislación (fallback Bonistas), valor relativo AL30/GD29 y breakeven tasa fija vs CER.
+* `on_relative_value.py` (`GET /arbitrage/on-relative-value`): ON en dólares con cronograma de Bull Market y precio en tiempo real (especie D, o C si no cotiza). TIR a precio medio y a cada punta, MD, spread contra las otras ON del emisor (interpolación por duration, sin extrapolar más de 1 año) y contra la curva soberana, e ideas de canje dentro del emisor (≥ 50 pb netos de costos, MD a ≤ 1 año). Informativo, sin alertas; aviso de posible rescate anticipado si el precio supera 103% del residual. Los cronogramas de todas las ON se descargan una vez por día con la sesión activa (`main.py`, `BULLMARKET_ON_ENABLED`) y no entran a `reference_bonds` a propósito, para que el motor no genere señales con ellos (`services/on_cashflows.py`).
+* `fx_implied.py` incluye las ON: las idas y vueltas con alguna ON se informan como `MEP_IDA_VUELTA_ON` / `CCL_IDA_VUELTA_ON` (poco volumen: confirmar puntas).
 
 ### 2.3 Referencia, cronogramas y calendario (`backend/app/services/`)
 * `reference_data_service.py`: CompararBonos + BCRA + IPC; **consenso de cronogramas de provinciales** entre CompararBonos, Bull Market, Mercados Argentina y Bruno618 (verificado si ≥ 2 fuentes coinciden en fechas ±3 días y montos ±0,05; si no, mayoría; con empate, ranking CompararBonos > Bull Market > Mercados Argentina > Bruno618). Agrega **pagos próximos** (corte en ≤ 15 días) que la referencia no lista, desde Bull Market.
@@ -60,12 +65,17 @@ Rava: descartada para cotizaciones en vivo, pero su descarga de históricos diar
 * `curves_service.py`: curvas por familia con ajuste en ln(duration), desvío en pb, TIR propia (flujos + precio BYMA) y TIR en **MEP o cable**.
 * `market_book_service.py` + `bullmarket_session.py`: ingesta de libros (solo guarda cambios) y sesión de Bull Market (cookie en `secrets/`, nunca expuesta).
 * `alert_service.py` + `notifier.py`: alertas (oportunidad nueva, confirmada en tiempo real, sesión vencida, fuente caída/recuperada) y toast nativo de Windows vía PowerShell.
+* `quote_table.py` (`GET /quotes/table`): una fila por instrumento con precio en pesos, MEP y cable (une las especies de bonistas.com; con sesión, último operado de Bull Market). Solo para el dashboard: el motor usa las especies por separado.
+* `bond_profile_service.py`: ficha del bono (ver §8, Etapa 2).
+* `swap_pricing.py`: precios ejecutables del simulador de swaps. Vende a la punta compradora y compra a la vendedora recorriendo el libro para la cantidad pedida; fuente por pata: Bull Market en tiempo real → BYMA del día → último operado de bonistas.com, con aviso. Si el libro visible no alcanza, el resto se valúa al último nivel y se avisa. Caso real que lo motivó: AN29D → AO29D daba 1,0417 nominales por nominal con el último operado y 1,0384 con puntas (lo mismo que el broker).
 
 ### 2.4 Dashboard (`backend/app/static/index.html`)
-Pestañas: Monitor de cotizaciones, Curvas de rendimiento (por familia, MEP/cable, desvíos), Command Center (parámetros, Bull Market, señales, ratios), CI vs 24hs, Dólar implícito y Simulador de swaps. Campana de alertas con preferencias, indicador de mercado/fuentes/feriados y **guía de uso** (clic en el logo; se abre sola la primera vez). Assets locales en `static/vendor/` (sin CDN).
+Pestañas: Cotizaciones (una fila por instrumento: pesos, MEP, cable, variación, paridad, TIR, TEM, duration; el ticker abre la ficha), Curvas de rendimiento (por familia, MEP/cable, desvíos), Arbitrajes (parámetros, Bull Market, señales con botón al simulador, prima AL/GD, ratios), CI vs 24hs, Dólar implícito, ON: valor relativo y Simulador de swaps. Campana de alertas con preferencias, indicador de mercado/fuentes/feriados y **guía de uso** (botón **?** del encabezado; se abre sola la primera vez). Assets locales en `static/vendor/` (sin CDN).
+
+Convenciones de la interfaz: números en formato argentino (`nf`/`nv`, separadores `,.` también en Plotly), encabezados de tabla fijos al hacer scroll (`.fit-viewport` + `fitTables()`), orden por columna persistido, filas de notas desplegables (ratios, CI vs 24hs) y nombres de estrategias en castellano (`STRATEGY_LABELS`). Los textos de las señales que arma el backend todavía usan punto decimal.
 
 ### 2.5 Calidad
-* 250 tests (`backend/tests/`), offline: base temporal, fixtures recortados de respuestas reales, nunca la cookie real ni notificaciones reales.
+* 314 tests (`backend/tests/`), offline: base temporal, fixtures recortados de respuestas reales, nunca la cookie real ni notificaciones reales.
 * SQLite en WAL; migraciones mínimas (`db/migrations.py` agrega columnas faltantes); fechas siempre en UTC con zona (`db/types.py`).
 
 ---
@@ -94,16 +104,17 @@ bonistas/
 │   ├── app/
 │   │   ├── config.py                    # Settings (variables de entorno / .env)
 │   │   ├── api/routes.py                # Endpoints REST e instancias compartidas de servicios
-│   │   ├── arbitrage/                   # market_view, ci_24hs, fx_implied, ratios, engine, strategies
+│   │   ├── arbitrage/                   # market_view, ci_24hs, fx_implied, ratios, engine, strategies, on_relative_value
 │   │   ├── data/                        # Clientes: byma, bullmarket, bonistas, comparar_bonos, bruno618,
-│   │   │                                #   mercados_argentina, bcra, mae, dolar_api, macro_connectors, bond_catalog
+│   │   │                                #   mercados_argentina, bcra, mae, rava, dolar_api, macro_connectors, bond_catalog
 │   │   ├── db/                          # models, session (WAL), migrations, types (UTCDateTime)
 │   │   ├── quant/                       # cashflows (AL/GD 2020), fixed_income, arbitrage_math, swap_calculator
 │   │   ├── schemas/                     # Pydantic
 │   │   ├── services/                    # ingestion, market_book, reference_data, curves, market_calendar,
-│   │   │                                #   holiday, bullmarket_session, alert, notifier, source_health, trading_settings
+│   │   │                                #   holiday, bullmarket_session, alert, notifier, source_health, trading_settings,
+│   │   │                                #   price_history, bond_profile_service, swap_pricing, on_cashflows, quote_table
 │   │   └── static/                      # index.html (dashboard) + vendor/ (tailwind, plotly, lucide)
-│   └── tests/                           # 250 tests + fixtures/ (respuestas reales recortadas)
+│   └── tests/                           # 314 tests + fixtures/ (respuestas reales recortadas)
 ├── docs/screenshots/                    # Capturas del README
 ├── secrets/                             # Cookie de Bull Market (gitignored, se crea al pegarla)
 ├── temporal/                            # Scripts personales del usuario (gitignored: contiene cookies)
@@ -112,7 +123,7 @@ bonistas/
 ├── pytest.ini · requirements.txt · README.md · PROJECT_CONTEXT.md
 ```
 
-Tablas: `bonds`, `price_snapshots` (Bonistas, solo cambios), `book_quotes` (BYMA/Bull Market, con `depth`), `reference_bonds` (flujos, `flows_source`, `flows_verified`, `flows_check`, `flows_detail`), `macro_indicators`, `arbitrage_signals`, `alerts`, `market_holidays`, `user_settings`.
+Tablas: `bonds`, `price_snapshots` (Bonistas, solo cambios), `book_quotes` (BYMA/Bull Market, con `depth`), `reference_bonds` (flujos, `flows_source`, `flows_verified`, `flows_check`, `flows_detail`), `macro_indicators`, `arbitrage_signals`, `alerts`, `market_holidays`, `user_settings`, `daily_closes` (cierres de Rava), `index_daily` (serie histórica del CER), `bond_flow_log` (pagos pasados y futuros del cronograma de Bull Market).
 
 ---
 
@@ -144,7 +155,7 @@ Tablas: `bonds`, `price_snapshots` (Bonistas, solo cambios), `book_quotes` (BYMA
 
 1. **Acciones Merval y Panel General**: CI vs 24hs con las mismas reglas de puntas, costo y ganancia mínima.
 2. **CEDEARs**: CI vs 24hs y CCL implícito CEDEAR vs subyacente (los feriados de EE.UU. ya se registran).
-3. **Obligaciones Negociables**: curvas corporativas vs soberanos.
+3. ~~Obligaciones Negociables~~: hecho como valor relativo informativo (§2.2). Pendiente: señales operables.
 4. **"Gangas"**: caídas > 5% con volumen mínimo (> 4 operaciones), como `temporal/MonitorMercado.ps1` (`Show-Gangas`).
 5. **Canales externos** (Telegram, etc.): en v1.1 solo Windows + dashboard.
 
@@ -160,7 +171,7 @@ El endpoint de Bull Market `GetStockPrices` acepta `index=merval`, `panel+genera
 ```
 * Dashboard: `http://127.0.0.1:8050` · API: `/docs`.
 * Al iniciar: migra la base, carga feriados (los descarga si no son del día), descarga la referencia si no es del día o quedó incompleta, y corre un ciclo de mercado.
-* Bull Market: pegar el encabezado `cookie` completo en Command Center → "Bull Market · tiempo real". Con la sesión activa, el ciclo consulta puntas cada 60 s y, una vez por día, los cronogramas de pago.
+* Bull Market: pegar el encabezado `cookie` completo en la pestaña Arbitrajes → "Bull Market · tiempo real". Con la sesión activa, el ciclo consulta puntas cada 60 s y, una vez por día, los cronogramas de pago.
 
 ### Tests
 ```powershell
@@ -211,6 +222,7 @@ El endpoint de Bull Market `GetStockPrices` acepta `index=merval`, `panel+genera
 * Nuevas tablas: `book_quotes` (puntas por fuente/especie/plazo, **solo se agrega una fila cuando algo cambia**) y `reference_bonds`.
 * Los snapshots de Bonistas también se guardan solo cuando cambian.
 * Valuación (`/calculator/valuation`) y flujos (`/bonds/{t}/cashflows`): cronograma propio verificado (AL/GD) o, si no hay, flujos de referencia de CompararBonos (LECAP, BONCAP, CER con TIR real, BOPREAL, tasa fija). Duales y dollar linked: 422 (no publican flujos proyectables). Plazo `CI`/`24HS` para la fecha de liquidación por defecto.
+* Ficha del bono (`/bonds/{t}/profile` y `/bonds/{t}/history`, `services/bond_profile_service.py`): contexto, métricas al precio actual con flujos propios, sensibilidad del precio a la TIR, y la historia de precio / TIR / paridad más el ratio contra sus pares con la banda del motor. La historia revalúa cada cierre de Rava (se baja a demanda al abrir la ficha, una vez por día por especie, `PriceHistoryService.ensure`) con los flujos que el bono tenía por delante ese día, respetando el corte de cupón. Solo hay TIR histórica cuando se conocen los pagos pasados: AL/GD 2020 (también paridad), LECAP/BONCAP, CER cupón cero y bonos con `bond_flow_log`. Los flujos CER se llevan al CER de cada fecha con la serie del BCRA (tabla `index_daily`, rezago de 10 días hábiles). ON, duales, provinciales y resto: solo historia de precios.
 * Endpoints nuevos: `GET /books`, `GET /status` (horario + salud de fuentes), `GET /reference/{ticker}`, `POST /reference/refresh`. `POST /ingest` ahora incluye BYMA.
 * **Bug corregido**: Bonistas publica variantes `_PUT` / `_TAM` (mismo instrumento, TIR bajo otro escenario); se fusionaban con el bono base y la TIR alternaba entre escenarios en cada ciclo (ej. BPOA8 9,3% ↔ 27,4%). Ahora se usa solo el escenario base.
 * Dashboard: indicador real de estado de mercado y salud de fuentes (antes decía "Rueda en Vivo" siempre); el encabezado muestra el mayorista A3500 (antes mostraba el oficial minorista con la etiqueta "mayorista").
@@ -325,3 +337,22 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 * Resultado real: 79 cronogramas; 14 provinciales verificados (se suman BC37D, desempate MA + Bull Market contra Bruno618, y SJO35); NDG34 agregado (solo Bull Market, sin verificar); pagos próximos agregados: TX28 (9/11) y BAF27 (13/11). BDC33: Bull Market redondea amortizaciones 33/33/34 vs 33,33/33,33/33,34 (gana la mayoría; fechas iguales).
 * La sesión se mantuvo activa más de 30 minutos con el polling de 60 s.
 
+### Obligaciones negociables (2026-11-06)
+
+* Catálogo corporativo, cronogramas de Bull Market (una vez por día con la sesión activa, fuera de `reference_bonds`), pestaña **ON: valor relativo** (`arbitrage/on_relative_value.py`), ON en el dólar implícito (`MEP_IDA_VUELTA_ON` / `CCL_IDA_VUELTA_ON`) y tabla de cotizaciones unificada por instrumento (`services/quote_table.py`, `GET /quotes/table`).
+
+### Ficha del bono (2026-11-12)
+
+* `GET /bonds/{t}/profile` y `GET /bonds/{t}/history` (`services/bond_profile_service.py`), detalle en la Etapa 2. Validado: TIR de GD35D 12,54% y tabla de sensibilidad iguales a bonistas.com; última TIR histórica igual a CompararBonos en GD35, TZX28, TX31 y S30N6.
+* Liquidación T+1 desde el 27/05/2024 (T+2 antes) al revaluar la historia; los flujos CER se ajustan con el CER de 10 días hábiles antes de cada liquidación.
+* Dashboard: modal con chips de contexto, métricas, próximo pago y corte, "Contra su último año", sensibilidad, gráfico con pestañas (Precio / TIR / Paridad / Ratio contra su par) y rangos (3M a Todo), y flujo de fondos pendiente. Botón "Llevar al simulador".
+
+### Rediseño del dashboard (2026-11-12)
+
+* Monitor sin columna de acciones: el ticker abre la ficha. Columnas Ticker, Denominación, Ley, Pesos, Dólar MEP, Dólar cable, Var. día, Paridad, TIR, TEM, Duration, con orden persistido.
+* Encabezados fijos en las tablas largas, filtros con contador, colores neutros, "Command Center" → **Arbitrajes**, bps → pb, notas desplegables en ratios y CI vs 24hs, botón de guía en el encabezado.
+
+### Simulador de swaps con precios ejecutables (2026-11-12)
+
+* Bug: abrir el simulador desde una señal (AN29D → AO29D) mostraba un resultado de GD30/AL30. Causa: dos pedidos en paralelo y la respuesta vieja pisaba a la nueva. Ahora los selectores se fijan antes de cambiar de pestaña y cada pedido lleva un número de secuencia.
+* El simulador usaba el último operado de bonistas.com; ahora usa puntas con profundidad (`services/swap_pricing.py`, §2.3). `/calculator/swap` informa `sell_symbol`/`buy_symbol`, `*_price_kind` (`PUNTAS`/`ULTIMO`), `*_price_source`, `*_depth_ok` y `notes`. El resumen sale en formato argentino con precios y porcentaje.
