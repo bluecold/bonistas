@@ -171,6 +171,7 @@ Lista completa en [PROJECT_CONTEXT.md §7](PROJECT_CONTEXT.md).
 | [BYMA Open Data](https://open.bymadata.com.ar) | Puntas CI/24hs de todos los bonos, cauciones, horario de mercado | 20 min |
 | Bull Market (sesión del usuario) | Puntas con 5 niveles de profundidad; cronogramas de pago | Tiempo real / diario |
 | [Bonistas.com](https://bonistas.com) | TIR, duration, paridad, valor técnico | — |
+| [Bonistas.com · próximos pagos](https://bonistas.com/proximos-pagos) | Cronogramas de más de cien ON sin sesión de Bull Market; pagos con corte inminente | Diario |
 | [CompararBonos](https://compararbonos.com.ar) | Flujos de fondos y especies de cada bono | Diario |
 | [Bruno618](https://bruno618.com/herramientas/flujo-de-fondos-renta-fija) | Cronogramas de provinciales en dólares | Diario |
 | [Mercados Argentina](https://mercadosargentina.com.ar/renta-fija/titulos) | Cronogramas de provinciales (verificación por consenso) | Diario |
@@ -216,7 +217,7 @@ backend/
 .\.venv\Scripts\pytest backend/tests -q
 ```
 
-314 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
+333 tests. Corren **sin internet y sin tocar `bonistas.db`**: usan una base temporal y respuestas reales recortadas como fixtures. Nunca usan la cookie real ni muestran notificaciones. Los tests que consultan APIs reales están marcados `network` y solo corren con `RUN_NETWORK_TESTS=1`.
 
 ---
 

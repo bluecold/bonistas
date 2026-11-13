@@ -54,13 +54,17 @@ async def refresh_bullmarket_cashflows(db, force: bool = False) -> None:
 
 
 async def refresh_on_cashflows(db) -> None:
-    """Una vez por día, con la sesión activa: cronogramas de todas las ON (valor relativo)."""
+    """
+    Cronogramas de todas las ON (valor relativo). Con la sesión activa, de Bull Market una vez
+    por día; sin sesión, o para las que Bull Market no tiene, de bonistas.com (calendario del día
+    en memoria: completar lo que falte no vuelve a consultar la página).
+    """
     from datetime import date as _date
     from backend.app.api.routes import bullmarket_session, on_cashflow_service
     from backend.app.services.on_cashflows import on_base_tickers
-    if not settings.BULLMARKET_ON_ENABLED or bullmarket_session.status != "ACTIVA":
+    if not settings.BULLMARKET_ON_ENABLED:
         return
-    if on_cashflow_service.prefetched_day == _date.today():
+    if bullmarket_session.status == "ACTIVA" and on_cashflow_service.prefetched_day == _date.today():
         return
     try:
         await on_cashflow_service.prefetch(on_base_tickers(db))

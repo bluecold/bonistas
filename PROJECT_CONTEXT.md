@@ -35,6 +35,7 @@ Avisa por **notificación de Windows** y en el **dashboard**. **No ejecuta órde
 | BYMA Open Data | `data/byma_client.py` | Puntas CI/24hs (mejor punta y cantidad), cauciones, horario de mercado | Cada 60 s, 20 min de demora |
 | Bull Market (sesión del usuario) | `data/bullmarket_client.py` | Puntas con **5 niveles** en tiempo real; **cronogramas de pago** de muchos bonos por pedido | Puntas cada 60 s en rueda; cronogramas 1 vez por día |
 | Bonistas.com | `data/bonistas_client.py` | TIR, MD, paridad, valor técnico por especie | Cada 60 s |
+| Bonistas.com · próximos pagos | `data/bonistas_payments_client.py` | Renta, amortización y saldo de todos los pagos futuros de ~180 instrumentos (115 ON) en una sola página pública | 1 vez por día (cache en memoria) |
 | CompararBonos | `data/comparar_bonos_client.py` | Flujos, especies y clasificación (`tipo`) de cada bono, soberanos de la región y UST | Diario 10:15 ART |
 | Bruno618 | `data/bruno618_client.py` | Cronogramas de 18 provinciales en USD | Diario |
 | Mercados Argentina | `data/mercados_argentina_client.py` | Cronogramas de 16 provinciales (incl. SJO35) | Diario, 1 s entre pedidos |
@@ -356,3 +357,20 @@ Endpoints: `GET /arbitrage/ci-24hs`, `GET /arbitrage/fx-implied?kind=MEP|CCL`, `
 
 * Bug: abrir el simulador desde una señal (AN29D → AO29D) mostraba un resultado de GD30/AL30. Causa: dos pedidos en paralelo y la respuesta vieja pisaba a la nueva. Ahora los selectores se fijan antes de cambiar de pestaña y cada pedido lleva un número de secuencia.
 * El simulador usaba el último operado de bonistas.com; ahora usa puntas con profundidad (`services/swap_pricing.py`, §2.3). `/calculator/swap` informa `sell_symbol`/`buy_symbol`, `*_price_kind` (`PUNTAS`/`ULTIMO`), `*_price_source`, `*_depth_ok` y `notes`. El resumen sale en formato argentino con precios y porcentaje.
+
+### Calendario de próximos pagos de bonistas.com (2026-11-13)
+
+* Fuente nueva: `https://bonistas.com/proximos-pagos` (pública, sin sesión). Los datos vienen en el JSON `__NEXT_DATA__` de la página: 1.263 pagos de 181 instrumentos (115 ON, soberanos, letras, Bopreales). `saldo` es el capital **antes** del pago; las fechas son las efectivas (corridas al día hábil); las especies en dólares figuran con el ticker D; los símbolos con `_` (`TXMD8_CER`) son la otra pata de un dual y se descartan.
+* Validación contra lo que ya había: mismos montos que Bull Market en YM34 y AL30 (fixtures) y que CompararBonos en 33 de 43 bonos con flujos en la referencia; las diferencias son de estimación (CER con otra fecha de índice, AO28/AO29 por redondeo).
+* Uso 1, **cronogramas de ON sin sesión**: `OnCashflowService` usa Bull Market si hay sesión y, si no (o si Bull Market no tiene la ON), bonistas.com. Cada cronograma lleva `source` (`BULLMARKET` / `BONISTAS`); el de bonistas se reemplaza por el de Bull Market cuando se inicia la sesión. La ficha y el valor relativo de ON ya no dependen de la cookie; `/arbitrage/on-relative-value` informa `schedule_sources`.
+* Uso 2, **pagos con corte inminente sin sesión** (caso TX28): `ReferenceDataService.add_bonistas_imminent_flows` corre en la actualización diaria de referencia y después de los cronogramas de Bull Market; solo agrega lo que siga faltando y solo a bonos que ya tienen flujos (un pago suelto en un bono sin cronograma daría una TIR falsa). Se registra en `flows_check.pagos_proximos_bonistas`.
+* No entra al consenso de provinciales: bonistas.com no publica provinciales en dólares. Estado en `source_health` como `BONISTAS_PAGOS`; si la página falla se reintenta a los 10 minutos y el resto sigue igual.
+* **Descartada: calendario de IOL** (`iol.invertironline.com/Research/CalendarioList`). Responde JSON sin sesión, pero entre mayo de 2026 y noviembre de 2027 solo trae 51 eventos de 11 especies, la mayoría anteriores al canje de 2020 (AC17, DICY, DIA0, AA37, AA46, PAY0), y no incluye AL/GD, CER ni ON.
+
+### Bloque de obligación negociable en la ficha (2026-11-13)
+
+* La ficha (`GET /bonds/{t}/profile`) devuelve `on` cuando el instrumento es una ON (`null` para los bonos): emisor, spread contra las otras ON de la empresa y contra el soberano (pb de TIR a duration parecida), dólar de pago, capital residual, puntas y diferencia entre puntas, TIR ejecutable (comprando / vendiendo), volumen del día por especie, avisos (sobre la par, sin puntas, TIR implausible) y la tabla de las ON del mismo emisor ordenadas por vencimiento.
+* Reusa `analyze_ons` acotado al emisor (`routes._profile_on` + `on_relative_value.profile_block`, función pura). Los cronogramas del emisor se piden al abrir la ficha con `prefetch(..., mark_day=False)`, que no cuenta como la descarga diaria de todas las ON. Abrir la ficha por la especie D o C muestra el mismo bloque (base = especie O).
+* Sin sesión de Bull Market funciona con cronogramas y precios de bonistas.com (con demora): no hay puntas, TIR ejecutable ni dólar de pago. Paridad y volumen son siempre de bonistas.com.
+* Dashboard: sección "Obligación negociable · <emisor>" en el modal, chip de emisor y tabla de pares con enlace a la ficha de cada una. Si el bloque falla, la ficha se muestra igual.
+* Pendiente (sin fuente): lámina mínima, calificación de riesgo y condiciones de rescate (prospectos de CNV / BYMA).

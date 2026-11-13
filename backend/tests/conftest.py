@@ -170,6 +170,19 @@ def _install_offline_sources(monkeypatch):
 
     monkeypatch.setattr(MercadosArgentinaClient, "fetch_schedules", fake_ma_schedules)
 
+    # --- bonistas.com, próximos pagos: página real recortada del 13/11/2026 (12 instrumentos)
+    from backend.app.data import bonistas_payments_client as bpc
+    pagos_html = (FIXTURES / "bonistas_proximos_pagos.html").read_text(encoding="utf-8")
+
+    async def fake_bonistas_pagos(self):
+        return pagos_html
+
+    monkeypatch.setattr(bpc.BonistasPaymentsClient, "fetch_raw", fake_bonistas_pagos)
+    # El calendario compartido se guarda por día: cada test arranca sin cache
+    monkeypatch.setattr(bpc.bonistas_payments, "_day", None)
+    monkeypatch.setattr(bpc.bonistas_payments, "_schedules", {})
+    monkeypatch.setattr(bpc.bonistas_payments, "_failed_at", 0.0)
+
     # --- MAE: feriados (respuesta real del 05/11/2026)
     from backend.app.data.mae_client import MaeClient
     mae = _load("mae_feriados.json")

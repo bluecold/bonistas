@@ -266,3 +266,62 @@ def sovereign_curve(quotes: List[Dict[str, Any]]) -> List[Tuple[float, float]]:
     return [(q["modified_duration"], q["ytm_percentage"]) for q in quotes
             if q.get("bond_type") == "HARD_DOLLAR" and q.get("price_ars")
             and q.get("modified_duration") and q.get("ytm_percentage")]
+
+
+def profile_block(base: str, issuer: Optional[str], rows: List[OnRow],
+                  quotes: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Bloque de obligación negociable para la ficha: la ON contra su emisor y contra el soberano,
+    liquidez (puntas y volumen), en qué dólar paga y las demás ON de la misma empresa.
+
+    `rows`: salida de `analyze_ons` para las ON del emisor (incluida la de la ficha, `base`).
+    `quotes`: cotizaciones de bonistas.com por especie (paridad y volumen, con demora).
+    """
+    def stem(t: str) -> str:
+        return t[:-1] if t[-1:] in ("O", "D", "C") else t
+
+    def parity(t: str) -> Optional[float]:
+        for sym in (stem(t) + "D", t):
+            q = quotes.get(sym)
+            if q is not None and q.get("parity_percentage"):
+                return round(float(q["parity_percentage"]), 2)
+        return None
+
+    own = next((r for r in rows if r.ticker == base), None)
+    group = [r for r in rows if r.ticker == base or (issuer and r.issuer == issuer)]
+    group.sort(key=lambda r: (r.maturity or date.max, r.ticker))
+    peers = [{
+        "ticker": r.ticker, "price_symbol": r.price_symbol, "current": r.ticker == base,
+        "maturity": r.maturity.isoformat() if r.maturity else None,
+        "price": r.price, "dollar": r.dollar, "price_source": r.source if r.price else None,
+        "tir_pct": r.tir_pct, "md": r.md, "parity_pct": parity(r.ticker),
+        "spread_vs_issuer_bps": r.spread_vs_issuer_bps, "spread_pct": r.spread_pct, "liquid": r.liquid,
+        "payment_currency": r.payment_currency,
+    } for r in group]
+
+    volumes = []
+    for suffix in ("O", "D", "C"):
+        q = quotes.get(stem(base) + suffix)
+        if q is not None and q.get("volume_millions"):
+            volumes.append({"symbol": stem(base) + suffix, "millions": round(float(q["volume_millions"]), 4)})
+
+    out: Dict[str, Any] = {
+        "base": base, "issuer": issuer, "peers": peers, "other_peers": sum(1 for p in peers if not p["current"]),
+        "volumes": volumes, "has_schedule": own is not None,
+        "payment_currency": None, "price_dollar": None, "price_source": None, "residual": None,
+        "bid": None, "ask": None, "spread_pct": None, "liquid": None,
+        "tir_buy_pct": None, "tir_sell_pct": None,
+        "issuer_fit_pct": None, "spread_vs_issuer_bps": None,
+        "sovereign_fit_pct": None, "spread_vs_sovereign_bps": None, "flags": [],
+    }
+    if own is not None:
+        out.update(
+            payment_currency=own.payment_currency, price_dollar=own.dollar, price_source=own.source,
+            residual=own.residual, bid=own.bid, ask=own.ask, spread_pct=own.spread_pct,
+            liquid=own.liquid if own.spread_pct is not None else None,
+            tir_buy_pct=own.tir_buy_pct, tir_sell_pct=own.tir_sell_pct,
+            issuer_fit_pct=own.issuer_fit_pct, spread_vs_issuer_bps=own.spread_vs_issuer_bps,
+            sovereign_fit_pct=own.sovereign_fit_pct, spread_vs_sovereign_bps=own.spread_vs_sovereign_bps,
+            flags=list(own.flags),
+        )
+    return out

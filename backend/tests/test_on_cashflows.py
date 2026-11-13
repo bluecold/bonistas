@@ -68,10 +68,24 @@ def test_ficha_route_for_on(client, monkeypatch):
         db.commit()
     db.close()
 
-    # Sin sesión: mensaje claro, no el genérico de "sin flujos"
+    # Sin sesión y sin la ON en bonistas.com: mensaje claro, no el genérico de "sin flujos"
+    from backend.app.data import bonistas_payments_client as bpc
     monkeypatch.setattr(routes.on_cashflow_service.session, "get_cookie", lambda: None)
+    routes.on_cashflow_service._cache.clear()
+    with monkeypatch.context() as mp:
+        async def nothing(self, after):
+            return {}, {}
+        mp.setattr(bpc.BonistasPaymentsClient, "fetch_schedules", nothing)
+        mp.setattr(bpc.bonistas_payments, "_day", None)
+        res = client.get("/api/v1/bonds/YM34O/cashflows")
+        assert res.status_code == 422 and "Bull Market" in res.json()["detail"]
+    monkeypatch.setattr(bpc.bonistas_payments, "_day", None)
+
+    # Sin sesión: respaldo de bonistas.com (publica la especie D: YM34D)
     res = client.get("/api/v1/bonds/YM34O/cashflows")
-    assert res.status_code == 422 and "Bull Market" in res.json()["detail"]
+    assert res.status_code == 200, res.text
+    assert {r["source"] for r in res.json()} == {"BONISTAS"} and res.json()[-1]["residual_capital"] == 0
+    routes.on_cashflow_service._cache.clear()
 
     # Con sesión activa: cronograma real de Bull Market
     monkeypatch.setattr(routes.on_cashflow_service.session, "get_cookie", lambda: TEST_BM_COOKIE)

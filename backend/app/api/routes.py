@@ -1,3 +1,4 @@
+import logging
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -45,7 +46,8 @@ from backend.app.services.reference_data_service import ReferenceDataService
 from backend.app.services.market_calendar import MarketCalendar, next_business_day
 from backend.app.services.source_health import source_health
 from backend.app.services.quote_table import consolidate
-from backend.app.services.on_cashflows import OnCashflowService, OnCashflowUnavailable
+from backend.app.services.on_cashflows import OnCashflowService, OnCashflowUnavailable, source_of
+from backend.app.data.bonistas_payments_client import bonistas_payments
 from backend.app.services.bullmarket_session import InvalidCookieError
 from backend.app.services.alert_service import AlertService, get_prefs, update_prefs
 from backend.app.services.price_history_service import PriceHistoryService
@@ -59,7 +61,8 @@ router = APIRouter()
 ingestion_service = IngestionService()
 market_book_service = MarketBookService()
 bullmarket_session = market_book_service.bm_session
-on_cashflow_service = OnCashflowService(bullmarket_session)
+on_cashflow_service = OnCashflowService(bullmarket_session, bonistas=bonistas_payments)
+logger = logging.getLogger(__name__)
 arbitrage_engine = ArbitrageEngine(ingestion_service, book_service=market_book_service)
 alert_service = AlertService()
 price_history_service = PriceHistoryService()
@@ -372,7 +375,8 @@ async def get_bond_cashflows(
     """
     Flujos de fondos futuros por 100 VN. Para Bonares/Globales se detalla renta, amortización y
     residual; para el resto (fuente CompararBonos) solo se conoce el flujo total de cada fecha.
-    Las obligaciones negociables salen de Bull Market (requiere la sesión activa).
+    Las obligaciones negociables salen de Bull Market (con la sesión activa) o, sin sesión, del
+    calendario de próximos pagos de bonistas.com.
     """
     on_bond = _find_bond(db, ticker)
     if on_bond is not None and on_bond.bond_type == "ON":
@@ -386,7 +390,7 @@ async def get_bond_cashflows(
             CashFlowItemResponse(
                 date=r.date, days_from_settlement=(r.date - s_date).days, interest_rate=None,
                 coupon_amount=r.coupon, amortization_amount=r.amortization, total_cashflow=r.total,
-                residual_capital=r.residual, source="BULLMARKET", currency=sch.currency,
+                residual_capital=r.residual, source=source_of(sch), currency=sch.currency,
                 payment_currency=pay,
             )
             for r in sch.rows if r.date > s_date
@@ -495,6 +499,42 @@ def _profile_reference_metrics(db: Session, model: profile.BondModel) -> Dict[st
     return {}
 
 
+async def _profile_on(db: Session, model: profile.BondModel) -> Optional[Dict[str, Any]]:
+    """
+    Bloque propio de las ON en la ficha: emisor, spread contra las otras ON de la empresa y contra
+    el soberano, liquidez y moneda de pago. Reusa el análisis de valor relativo, acotado a las ON
+    del mismo emisor (sus cronogramas se piden acá si todavía no se descargaron hoy).
+    """
+    bond = model.bond
+    if bond is None or bond.bond_type != "ON":
+        return None
+    from backend.app.arbitrage.on_relative_value import analyze_ons, profile_block, sovereign_curve
+    from backend.app.services.on_cashflows import on_base_tickers
+    t = bond.ticker
+    stem = t[:-1] if t[-1:] in ("O", "D", "C") else t
+    bases = on_base_tickers(db)
+    base = next((b for b in (stem + "O", stem + "D", stem + "C") if b in bases), t)
+    issuers = ingestion_service.issuer_by_ticker
+    issuer = next((issuers[x] for x in (base, t, stem + "D") if issuers.get(x)), None)
+    group = [b for b in bases if issuer and issuers.get(b) == issuer]
+    if base not in group:
+        group.append(base)
+    try:
+        await on_cashflow_service.prefetch(group, mark_day=False)
+    except Exception as e:
+        logger.warning(f"Ficha ON {t}: cronogramas del emisor: {e}")
+    cached = on_cashflow_service.schedules()
+    schedules = {b: cached[b] for b in group if b in cached}
+    if base not in schedules and t in cached:
+        schedules[base] = cached[t]          # la ficha se abrió por la especie D o C
+    scan = arbitrage_engine.scan(db)
+    quotes = [q.model_dump() for q in ingestion_service.get_latest_quotes(db, settlement="24HS")]
+    by_ticker = {q["ticker"]: q for q in quotes}
+    rows, _ = analyze_ons(scan.on_view, schedules, {b: issuer for b in schedules} if issuer else {},
+                          by_ticker, sovereign_curve(quotes), scan.params.commission_pct)
+    return profile_block(base, issuer, rows, by_ticker)
+
+
 async def _profile_cer(db: Session, model: profile.BondModel) -> Optional[profile.CerSeries]:
     return profile.CerSeries(await price_history_service.ensure_cer(db)) if model.cer else None
 
@@ -512,8 +552,14 @@ async def get_bond_profile(ticker: str, db: Session = Depends(get_db)):
     s_date = next_business_day(today)
     metrics = profile.valuation(model, price["price"], s_date, cer)
     metrics["settlement_date"] = s_date.isoformat()
+    try:
+        on_block = await _profile_on(db, model)
+    except Exception as e:                      # el bloque de ON es un agregado: nunca rompe la ficha
+        db.rollback()
+        logger.warning(f"Ficha {ticker}: bloque de ON no disponible: {e}")
+        on_block = None
     return {"context": profile.context(model, today), "quote": price, "metrics": metrics,
-            "reference_metrics": _profile_reference_metrics(db, model)}
+            "reference_metrics": _profile_reference_metrics(db, model), "on": on_block}
 
 
 @router.get("/bonds/{ticker}/history", tags=["Quant Analytics"])
@@ -896,7 +942,8 @@ def get_fx_implied(
 def get_on_relative_value(db: Session = Depends(get_db)):
     """
     Obligaciones negociables en dólares: TIR y duration con precio de Bull Market y cronograma de
-    Bull Market, spread contra su emisor y contra el soberano, e ideas de canje (informativo).
+    Bull Market (sin sesión: cronograma de bonistas.com), spread contra su emisor y contra el
+    soberano, e ideas de canje (informativo).
     """
     from backend.app.arbitrage.on_relative_value import analyze_ons, sovereign_curve
     scan = arbitrage_engine.scan(db)
@@ -911,14 +958,16 @@ def get_on_relative_value(db: Session = Depends(get_db)):
     if not settings.BULLMARKET_ON_ENABLED:
         status = "Deshabilitado (BULLMARKET_ON_ENABLED)."
     elif not schedules:
-        status = ("Sin cronogramas de ON todavía: se descargan de Bull Market una vez por día con la "
-                  "sesión activa (durante la rueda).")
+        status = ("Sin cronogramas de ON todavía: se descargan una vez por día durante la rueda "
+                  "(Bull Market con la sesión activa; sin sesión, bonistas.com).")
     elif not live:
         status = "Sin precios de ON en tiempo real: se usan los de bonistas.com, con demora."
     return {
         "params": scan.params.to_dict(), "settlement": "24HS",
         "settlement_date": scan.on_view.next_bd if scan.on_view is not None else None,
         "schedules": len(schedules), "live": live, "status": status,
+        "schedule_sources": {src: sum(1 for s in schedules.values() if source_of(s) == src)
+                             for src in sorted({source_of(s) for s in schedules.values()})},
         "rows": [r.to_dict() for r in rows], "swap_ideas": [i.to_dict() for i in ideas],
     }
 

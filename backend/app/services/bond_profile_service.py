@@ -167,12 +167,13 @@ def build_model(db: Session, ticker: str, today: date, on_schedule: Any = None) 
                 ticker=t, base=bond.ticker, kind="ON", flow_currency="USD" if usd else "ARS",
                 price_symbol=(stem + "D") if usd else bond.ticker, bond=bond,
                 flows=[(r.date, r.total) for r in on_schedule.rows if r.date > today],
-                flows_source="BULLMARKET",
+                flows_source=getattr(on_schedule, "source", None) or "BULLMARKET",
                 notes=["Solo se conocen los pagos futuros de esta ON: hay historia de precios, sin TIR histórica."])
         usd = (bond.currency or "").upper() == "USD"
         return BondModel(ticker=t, base=bond.ticker, kind="SIN_FLUJOS", flow_currency="USD" if usd else "ARS",
                          price_symbol=(stem + "D") if usd else bond.ticker, bond=bond,
-                         notes=["Los flujos de las ON salen de Bull Market: sin la sesión activa no hay TIR ni sensibilidad."])
+                         notes=["bonistas.com no publica los pagos de esta ON y Bull Market requiere la sesión activa: "
+                                "sin flujos no hay TIR ni sensibilidad."])
 
     ref = ReferenceDataService.get_reference(db, t)
     if ref is None or not ref.flows:

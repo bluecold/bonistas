@@ -487,7 +487,7 @@
         <section id="tab-on" class="hidden space-y-4">
             <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-2xl text-xs space-y-1">
                 <h2 class="text-sm font-bold text-white">Obligaciones negociables en dólares: valor relativo</h2>
-                <p class="text-slate-400">TIR y duration calculadas con el precio en tiempo real de Bull Market (especie D, o C si no cotiza) y el cronograma de Bull Market, liquidación 24hs. <b>Vs emisor</b>: cuánto rinde por encima (+) o por debajo (−) de las otras ON de la misma empresa con duration parecida, en puntos básicos. <b>Vs soberano</b>: contra la curva de Bonares/Globales. Es información, no genera alertas.</p>
+                <p class="text-slate-400">TIR y duration calculadas con el precio en tiempo real de Bull Market (especie D, o C si no cotiza) y el cronograma de Bull Market (sin sesión, el de bonistas.com), liquidación 24hs. <b>Vs emisor</b>: cuánto rinde por encima (+) o por debajo (−) de las otras ON de la misma empresa con duration parecida, en puntos básicos. <b>Vs soberano</b>: contra la curva de Bonares/Globales. Es información, no genera alertas.</p>
                 <p id="on-status" class="text-amber-300"></p>
             </div>
             <div>
@@ -674,7 +674,7 @@
                         <h2 class="text-lg font-bold text-white">Herramientas</h2>
                         <div class="grid md:grid-cols-2 gap-3">
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="layout-grid" class="w-4 h-4"></i> Monitor de cotizaciones <a class="guide-go ml-auto" data-tab="tab-quotes">Abrir →</a></div>
-                                Todos los bonos con precio en pesos, MEP y cable, variación del día, paridad, TIR y duration. Filtrá por familia o buscá un ticker. Tocá el <b>ticker</b> para abrir la ficha: datos del bono, sensibilidad a la TIR, historia de precio, TIR y paridad, y cronograma de pagos.</div>
+                                Todos los bonos con precio en pesos, MEP y cable, variación del día, paridad, TIR y duration. Filtrá por familia o buscá un ticker. Tocá el <b>ticker</b> para abrir la ficha: datos del bono, sensibilidad a la TIR, historia de precio, TIR y paridad, y cronograma de pagos. En las <b>obligaciones negociables</b> suma un bloque propio: emisor, cuánto rinde contra las otras ON de la misma empresa y contra el soberano, en qué dólar paga, liquidez (puntas y volumen) y la tabla de las demás ON del emisor.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="line-chart" class="w-4 h-4"></i> Curvas de rendimiento <a class="guide-go ml-auto" data-tab="tab-curves">Abrir →</a></div>
                                 Curvas por familia (soberanos, tasa fija, CER, provinciales, dollar linked, TAMAR/duales). La tabla de <b>desvíos</b> muestra qué bonos rinden más (verde, relativamente baratos) o menos (rojo, caros) que su curva: ideas para rotar. <b>Argentina vs región</b> muestra el riesgo país por tramo. En los bonos en dólares podés ver la TIR en <b>MEP o en cable</b> (la diferencia es el canje).</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="target" class="w-4 h-4"></i> Arbitrajes <a class="guide-go ml-auto" data-tab="tab-arbitrage">Abrir →</a></div>
@@ -684,7 +684,7 @@
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="dollar-sign" class="w-4 h-4"></i> Dólar implícito <a class="guide-go ml-auto" data-tab="tab-fx">Abrir →</a></div>
                                 El dólar MEP o cable que obtenés operando cada bono u obligación negociable (comprando en pesos y vendiendo en dólares, o al revés), con costos. Te dice con qué título conviene comprar o vender dólares, cuánto más barato sale que con AL30, y si una ida y vuelta deja ganancia. Las idas y vueltas con alguna ON se avisan aparte (<b>MEP_IDA_VUELTA_ON</b> / <b>CCL_IDA_VUELTA_ON</b>): las ON tienen poco volumen, confirmá las puntas en el broker.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="building-2" class="w-4 h-4"></i> ON: valor relativo <a class="guide-go ml-auto" data-tab="tab-on">Abrir →</a></div>
-                                TIR y duration de cada ON en dólares con precio y cronograma de Bull Market, cuánto rinde contra las otras ON de su emisor y contra el soberano, e ideas de canje dentro del mismo emisor (vender la que rinde de menos, comprar la que rinde de más, neto de costos). Es informativo: no genera alertas. Los cronogramas se descargan una vez por día con la sesión activa. Bull Market no informa rescates anticipados: las ON sobre la par llevan aviso.</div>
+                                TIR y duration de cada ON en dólares con precio y cronograma de Bull Market, cuánto rinde contra las otras ON de su emisor y contra el soberano, e ideas de canje dentro del mismo emisor (vender la que rinde de menos, comprar la que rinde de más, neto de costos). Es informativo: no genera alertas. Los cronogramas se descargan una vez por día: de Bull Market con la sesión activa y, sin sesión, del calendario de próximos pagos de bonistas.com (más de cien ON). Ninguna de las dos fuentes informa rescates anticipados: las ON sobre la par llevan aviso.</div>
                             <div class="guide-card"><div class="guide-card-h"><i data-lucide="arrow-left-right" class="w-4 h-4"></i> Simulador de swaps <a class="guide-go ml-auto" data-tab="tab-swap">Abrir →</a></div>
                                 Cuántos nominales del bono B recibís vendiendo X nominales del bono A, descontando costos, y cuánta TIR ganás o perdés con la rotación. Calcula como el broker: <b>vende a la punta compradora y compra a la vendedora</b>, recorriendo el libro para tu cantidad (Bull Market en tiempo real; sin sesión, BYMA con demora; sin puntas, el último operado, con aviso). Muestra los precios usados y de dónde salen. Poné la cantidad que vas a operar: el precio promedio depende de la profundidad.</div>
                             <div class="guide-card md:col-span-2"><div class="guide-card-h"><i data-lucide="bell" class="w-4 h-4"></i> Alertas (campanita)</div>
@@ -745,7 +745,7 @@
                             <tbody class="divide-y divide-brand-border/60">
                                 <tr><td class="py-1.5 text-white">BYMA Open Data</td><td>Puntas CI/24hs, cauciones, horario de mercado</td><td class="text-amber-300">20 min</td></tr>
                                 <tr><td class="py-1.5 text-white">Bull Market (tu sesión)</td><td>Puntas con 5 niveles de profundidad; cronogramas de pago</td><td class="text-emerald-300">Tiempo real</td></tr>
-                                <tr><td class="py-1.5 text-white">Bonistas.com</td><td>TIR, duration, paridad, valor técnico</td><td>Intradiario</td></tr>
+                                <tr><td class="py-1.5 text-white">Bonistas.com</td><td>TIR, duration, paridad, valor técnico; calendario de próximos pagos (cronogramas de ON sin sesión y pagos con corte inminente)</td><td>Intradiario</td></tr>
                                 <tr><td class="py-1.5 text-white">CompararBonos</td><td>Flujos de pago y clasificación de bonos</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">Mercados Argentina · Bruno618</td><td>Cronogramas de provinciales (verificación por consenso)</td><td>Diario</td></tr>
                                 <tr><td class="py-1.5 text-white">MAE</td><td>Feriados de mercado (Argentina y EE.UU.)</td><td>Diario</td></tr>
@@ -806,6 +806,8 @@
                 <!-- Métricas al precio actual -->
                 <div id="ficha-metrics" class="grid grid-cols-2 md:grid-cols-4 gap-2.5"></div>
                 <div id="ficha-next-payment" class="hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-200 font-sans"></div>
+                <!-- Obligación negociable: emisor, spreads, liquidez y otras ON de la empresa -->
+                <div id="ficha-on" class="hidden rounded-xl border border-brand-border bg-brand-dark/60 p-4 space-y-3"></div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <!-- Dónde está contra su último año -->
@@ -2008,6 +2010,8 @@
             document.getElementById('ficha-chips').innerHTML = '';
             document.getElementById('ficha-metrics').innerHTML = `<div class="col-span-full">${fichaLoading('Cargando ficha...')}</div>`;
             document.getElementById('ficha-next-payment').classList.add('hidden');
+            document.getElementById('ficha-on').classList.add('hidden');
+            document.getElementById('ficha-on').innerHTML = '';
             document.getElementById('ficha-year').innerHTML = fichaLoading('Cargando historia...');
             document.getElementById('ficha-sensitivity').innerHTML = fichaLoading('Cargando...');
             document.getElementById('ficha-tabs').innerHTML = '';
@@ -2062,6 +2066,7 @@
             const chip = (label, value) => value ? `<span class="px-2 py-0.5 rounded-md bg-brand-elevated border border-brand-border text-slate-300"><span class="text-slate-500">${label}</span> ${esc(value)}</span>` : '';
             document.getElementById('ficha-chips').innerHTML = [
                 chip('Tipo', FICHA_TYPES[c.bond_type] || c.bond_type),
+                chip('Emisor', fichaProfile.on ? fichaProfile.on.issuer : null),
                 chip('Ley', c.law === 'NY' ? 'Nueva York' : (c.law === 'ARG' ? 'Argentina' : c.law)),
                 chip('Flujos en', c.currency === 'USD' ? 'dólares' : (c.cer_adjusted ? 'pesos + CER' : 'pesos')),
                 chip('Emisión', c.issue_date ? fDate(c.issue_date) : null),
@@ -2112,6 +2117,8 @@
                 box.classList.remove('hidden');
             }
 
+            renderFichaOn();
+
             const sens = m.sensitivity || [];
             document.getElementById('ficha-sensitivity').innerHTML = sens.length ? `
                 <table class="w-full">
@@ -2127,6 +2134,86 @@
                     </tbody>
                 </table>`
                 : `<div class="text-slate-500 font-sans">${esc((c.notes || [])[0] || 'Sin flujos para calcular la sensibilidad.')}</div>`;
+        }
+
+        // Bloque propio de las obligaciones negociables (viene en profile.on; null para los bonos)
+        function renderFichaOn() {
+            const o = fichaProfile.on;
+            const box = document.getElementById('ficha-on');
+            if (!o) { box.classList.add('hidden'); return; }
+            const has = v => v !== null && v !== undefined;
+            const dollarName = { MEP: 'dólar MEP', CCL: 'dólar cable' };
+            const pb = v => !has(v) ? '-' : `${v > 0 ? '+' : ''}${fNum(v, 0)} pb`;
+            const pbCls = v => !has(v) ? 'text-slate-400' : (v >= 25 ? 'text-emerald-400' : (v <= -25 ? 'text-rose-400' : 'text-white'));
+            const cell = (label, value, sub = '', cls = 'text-white') => `
+                <div class="rounded-lg border border-brand-border/70 bg-brand-card/60 px-3 py-2">
+                    <div class="text-[11px] uppercase tracking-wide text-slate-500 font-sans">${label}</div>
+                    <div class="text-sm font-bold font-mono ${cls}">${value}</div>
+                    <div class="text-[11px] text-slate-500 font-sans min-h-[14px]">${sub}</div>
+                </div>`;
+            const others = o.other_peers || 0;
+            const cells = [
+                cell('Vs su emisor', pb(o.spread_vs_issuer_bps),
+                    has(o.spread_vs_issuer_bps) ? `rinde ${o.spread_vs_issuer_bps >= 0 ? 'más' : 'menos'} que sus pares; le correspondería ${fNum(o.issuer_fit_pct)}%`
+                        : (others ? 'sin ON del emisor de duration parecida' : 'el emisor no tiene otras ON con datos'),
+                    pbCls(o.spread_vs_issuer_bps)),
+                cell('Vs soberano', pb(o.spread_vs_sovereign_bps),
+                    has(o.spread_vs_sovereign_bps) ? `Bonares/Globales a la misma duration: ${fNum(o.sovereign_fit_pct)}%` : 'fuera del rango de la curva soberana',
+                    has(o.spread_vs_sovereign_bps) ? (o.spread_vs_sovereign_bps < 0 ? 'text-amber-300' : 'text-white') : 'text-slate-400'),
+                cell('Paga en', dollarName[o.payment_currency] ? dollarName[o.payment_currency].replace('dólar ', 'Dólar ') : '-',
+                    !o.has_schedule ? 'sin cronograma de pagos'
+                        : (dollarName[o.payment_currency] ? '' : 'MEP o cable: lo informa Bull Market, con la sesión activa · ')
+                          + (has(o.residual) ? `capital residual ${fNum(o.residual)}%` : '')),
+                cell('Liquidez',
+                    has(o.spread_pct) ? `${fNum(o.spread_pct)}% entre puntas` : 'Sin puntas',
+                    has(o.spread_pct) ? `${o.liquid ? 'operable' : 'poco líquida'} · compra ${fNum(o.bid)} · venta ${fNum(o.ask)}`
+                        : 'las puntas en tiempo real requieren la sesión de Bull Market',
+                    has(o.spread_pct) ? (o.liquid ? 'text-emerald-400' : 'text-amber-300') : 'text-slate-400'),
+            ];
+            if (has(o.tir_buy_pct) && has(o.tir_sell_pct)) {
+                cells.push(cell('TIR ejecutable', `${fNum(o.tir_buy_pct)}%`, `comprando a la punta vendedora · vendiendo, ${fNum(o.tir_sell_pct)}%`, 'text-cyan-300'));
+            }
+            if ((o.volumes || []).length) {
+                cells.push(cell('Volumen del día', o.volumes.map(v => fNum(v.millions, v.millions < 1 ? 3 : 1)).join(' · '),
+                    `millones, por especie (${o.volumes.map(v => esc(v.symbol)).join(' · ')}) · bonistas.com`));
+            }
+            const flags = (o.flags || []).map(f => `<div class="flex gap-1.5"><span class="text-amber-400">!</span><span>${esc(f)}</span></div>`).join('');
+            const peers = o.peers || [];
+            const table = others ? `
+                <div class="overflow-x-auto">
+                <table class="w-full text-xs font-mono">
+                    <thead class="text-slate-500 text-[11px] uppercase font-sans"><tr>
+                        <th class="py-1 text-left">ON del emisor</th><th class="py-1 text-left">Vence</th>
+                        <th class="py-1 text-right">Precio</th><th class="py-1 text-right">TIR</th>
+                        <th class="py-1 text-right">Duration</th><th class="py-1 text-right">Paridad</th>
+                        <th class="py-1 text-right">Vs emisor</th><th class="py-1 text-right">Puntas</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-brand-border/50">${peers.map(p => `
+                        <tr class="${p.current ? 'bg-brand-elevated/60' : ''}">
+                            <td class="py-1.5">${p.current
+                                ? `<span class="font-bold text-white">${esc(p.ticker)}</span> <span class="text-[10px] text-slate-500 font-sans">esta</span>`
+                                : `<button class="text-cyan-300 hover:underline" onclick="openCashflowModal('${esc(p.ticker)}')">${esc(p.ticker)}</button>`}</td>
+                            <td class="py-1.5 text-slate-300">${p.maturity ? fDate(p.maturity) : '-'}</td>
+                            <td class="py-1.5 text-right text-slate-300" title="${has(p.price) ? esc(p.price_symbol || '') + ' · ' + (p.price_source === 'BULLMARKET' ? 'Bull Market' : 'bonistas.com (demora)') : 'sin precio'}">${has(p.price) ? fNum(p.price) : '-'}</td>
+                            <td class="py-1.5 text-right text-cyan-300">${has(p.tir_pct) ? fNum(p.tir_pct) + '%' : '-'}</td>
+                            <td class="py-1.5 text-right text-slate-300">${has(p.md) ? fNum(p.md) : '-'}</td>
+                            <td class="py-1.5 text-right text-slate-300">${has(p.parity_pct) ? fNum(p.parity_pct) + '%' : '-'}</td>
+                            <td class="py-1.5 text-right font-bold ${pbCls(p.spread_vs_issuer_bps)}">${pb(p.spread_vs_issuer_bps)}</td>
+                            <td class="py-1.5 text-right ${has(p.spread_pct) ? (p.liquid ? 'text-emerald-400' : 'text-amber-300') : 'text-slate-500'}">${has(p.spread_pct) ? fNum(p.spread_pct) + '%' : '-'}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+                </div>` : '';
+            box.innerHTML = `
+                <div>
+                    <div class="text-xs font-bold text-white font-sans">Obligación negociable${o.issuer ? ' · ' + esc(o.issuer) : ''}</div>
+                    <div class="text-[11px] text-slate-500 font-sans">Cuánto rinde contra las otras ON de la misma empresa y contra el soberano, en puntos básicos de TIR a duration parecida, y qué tan fácil es operarla. Informativo: no genera alertas.</div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-2.5">${cells.join('')}</div>
+                ${flags ? `<div class="text-[11px] text-amber-200/90 font-sans space-y-0.5">${flags}</div>` : ''}
+                ${table}
+                <div class="text-[11px] text-slate-500 font-sans">Paridad y volumen son de bonistas.com (con demora). Ninguna fuente informa lámina mínima, calificación ni condiciones de rescate: revisalas en el prospecto antes de operar.</div>`;
+            box.classList.remove('hidden');
         }
 
         function renderFichaYear() {
@@ -2297,6 +2384,7 @@
                 const notes = {
                     COMPARARBONOS: 'Fuente: CompararBonos (flujo total por 100 VN; para CER, ajustado por el CER vigente).',
                     BULLMARKET: `Fuente: Bull Market (cronograma por 100 VN, ${cfs[0].currency === 'USD' ? 'en dólares' + ({CCL: ', pago en dólar cable', MEP: ', pago en dólar MEP'}[cfs[0].payment_currency] || '') : 'en pesos'}). Residual: capital que queda después de cada pago.`,
+                    BONISTAS: `Fuente: bonistas.com, calendario de próximos pagos (cronograma por 100 VN, ${cfs[0].currency === 'USD' ? 'en dólares' + ({CCL: ', pago en dólar cable', MEP: ', pago en dólar MEP'}[cfs[0].payment_currency] || '') : 'en pesos'}; fechas efectivas de pago). Con la sesión de Bull Market activa se usa el cronograma de Bull Market.`,
                     BRUNO618: 'Fuente: Bruno618 (cronograma proyectado desde las condiciones de emisión, por 100 VN original). Fechas sin verificar contra una segunda fuente: cerca de un pago no se generan señales CI vs 24hs.',
                 };
                 const sourceNote = notes[cfs[0].source]

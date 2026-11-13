@@ -5,7 +5,7 @@ from backend.app.arbitrage.fx_implied import (
     FxQuote, annotate_vs_reference, best_on_round_trips, implied_fx_quotes,
 )
 from backend.app.arbitrage.market_view import Book, Level, MarketView, combined_source
-from backend.app.arbitrage.on_relative_value import analyze_ons, interpolate, sovereign_fit
+from backend.app.arbitrage.on_relative_value import analyze_ons, interpolate, profile_block, sovereign_fit
 from backend.app.data.bullmarket_client import parse_stock_prices
 from backend.app.services.trading_settings import TradingParams
 from backend.tests.conftest import _load
@@ -143,3 +143,65 @@ def test_on_full_name_picks_most_descriptive_species():
     row = consolidate([{"ticker": "YM34O", "name": "YM34O", "bond_type": "ON", "price_ars": 1.0,
                         "ytm_percentage": 7.0}], {}, svc.on_names)[0]
     assert row["full_name"].startswith("YPF S.A.")
+
+
+# ------------------------------------------------------------------ bloque de ON en la ficha
+def test_profile_block_compares_against_issuer():
+    sch = {"AAA1O": _bullet(date(2029, 5, 15)), "AAA2O": _bullet(date(2029, 11, 15)),
+           "AAA3O": _bullet(date(2030, 5, 15))}
+    issuers = {t: "Empresa A" for t in sch}
+    view = _view(_book("AAA1D", "AAA1O", "MEP", 100.9, 101.1), _book("AAA2D", "AAA2O", "MEP", 100.9, 101.1),
+                 _book("AAA3D", "AAA3O", "MEP", 95.4, 95.6))
+    quotes = {"AAA3D": {"parity_percentage": 95.1, "volume_millions": 0.25},
+              "AAA3O": {"parity_percentage": 95.3, "volume_millions": 1.5},
+              "AAA1D": {"parity_percentage": 100.4, "volume_millions": None}}
+    rows, _ = analyze_ons(view, sch, issuers, quotes, [(1.0, 10.0), (2.0, 12.0), (5.0, 14.0)], 0.11)
+    block = profile_block("AAA3O", "Empresa A", rows, quotes)
+    assert block["issuer"] == "Empresa A" and block["has_schedule"] and block["other_peers"] == 2
+    assert block["spread_vs_issuer_bps"] > 100 and block["spread_vs_sovereign_bps"] is not None
+    assert block["liquid"] is True and block["bid"] == 95.4 and block["ask"] == 95.6
+    assert block["tir_buy_pct"] < block["tir_sell_pct"]      # comprar a la vendedora rinde menos
+    assert block["volumes"] == [{"symbol": "AAA3O", "millions": 1.5}, {"symbol": "AAA3D", "millions": 0.25}]
+    peers = block["peers"]
+    assert [p["ticker"] for p in peers] == ["AAA1O", "AAA2O", "AAA3O"]          # por vencimiento
+    assert [p["current"] for p in peers] == [False, False, True]
+    assert peers[2]["parity_pct"] == 95.1 and peers[0]["parity_pct"] == 100.4   # especie D
+    assert peers[1]["parity_pct"] is None
+
+
+def test_profile_block_without_schedule_or_issuer():
+    block = profile_block("ZZZ9O", None, [], {})
+    assert block["has_schedule"] is False and block["peers"] == [] and block["other_peers"] == 0
+    assert block["spread_vs_issuer_bps"] is None and block["liquid"] is None and block["flags"] == []
+
+
+def test_profile_endpoint_includes_on_block(client):
+    from backend.app.api import routes
+    from backend.app.db.models import Bond
+    from backend.app.db.session import SessionLocal
+
+    db = SessionLocal()
+    for t in ("YM34O", "YMCXO"):
+        if db.get(Bond, t) is None:
+            db.add(Bond(ticker=t, name=t, currency="USD", law="NY", bond_type="ON", maturity_date=date(2034, 1, 17)))
+    db.commit()
+    db.close()
+    routes.ingestion_service.issuer_by_ticker.update({"YM34O": "YPF S.A.", "YMCXO": "YPF S.A."})
+    before = routes.on_cashflow_service.prefetched_day
+
+    res = client.get("/api/v1/bonds/YM34O/profile")
+    assert res.status_code == 200, res.text
+    on = res.json()["on"]
+    assert on["issuer"] == "YPF S.A." and on["has_schedule"] and on["base"] == "YM34O"
+    tickers = {p["ticker"]: p for p in on["peers"]}
+    assert {"YM34O", "YMCXO"} <= set(tickers) and tickers["YM34O"]["current"]
+    assert tickers["YMCXO"]["maturity"] == "2031-09-11"
+    # Pedir las ON de un emisor no cuenta como la descarga diaria de todas las ON
+    assert routes.on_cashflow_service.prefetched_day == before
+
+    # Abrir la ficha por la especie D muestra el mismo bloque
+    if client.get("/api/v1/bonds/YM34D/profile").status_code == 200:
+        assert client.get("/api/v1/bonds/YM34D/profile").json()["on"]["base"] == "YM34O"
+
+    # Los bonos no llevan bloque de ON
+    assert client.get("/api/v1/bonds/AL30/profile").json()["on"] is None

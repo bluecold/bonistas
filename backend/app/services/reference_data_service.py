@@ -2,6 +2,7 @@
 Datos de referencia diarios:
 - CompararBonos: flujos futuros, valor técnico, pago final, etc. (tabla `reference_bonds`).
 - Bruno618: cronogramas de provinciales en dólares que CompararBonos no publica (respaldo).
+- bonistas.com (próximos pagos): pagos con corte inminente que CompararBonos ya no lista.
 - BCRA: CER, TAMAR y A3500 (tabla `macro_indicators`, con su fecha y fuente reales).
 - Inflación IPC (ArgentinaDatos), vía MacroDataConnector.
 
@@ -16,6 +17,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from backend.app.data.bcra_client import BcraClient
+from backend.app.data.bonistas_payments_client import BonistasPaymentsCache
+from backend.app.data.bonistas_payments_client import bonistas_payments as shared_bonistas_payments
 from backend.app.data.bruno618_client import Bruno618Client, ProvincialSchedule
 from backend.app.data.mercados_argentina_client import BYMA_SPECIES, MercadosArgentinaClient
 from backend.app.data.comparar_bonos_client import CompararBonosClient, ReferenceBondData
@@ -55,7 +58,9 @@ class ReferenceDataService:
         macro: Optional[MacroDataConnector] = None,
         bruno: Optional[Bruno618Client] = None,
         mercados: Optional[MercadosArgentinaClient] = None,
+        bonistas_payments: Optional[BonistasPaymentsCache] = None,
     ):
+        self.bonistas_payments = bonistas_payments or shared_bonistas_payments
         self.comparar = comparar or CompararBonosClient()
         self.bruno = bruno or Bruno618Client()
         self.mercados = mercados or MercadosArgentinaClient()
@@ -177,11 +182,16 @@ class ReferenceDataService:
 
     @staticmethod
     def add_imminent_flows(db: Session, schedules: Dict[str, ProvincialSchedule],
-                           today: Optional[date] = None) -> Dict[str, Any]:
+                           today: Optional[date] = None, source: str = "BULLMARKET",
+                           only_with_flows: bool = False) -> Dict[str, Any]:
         """
         Agrega a la referencia los pagos con corte en los próximos IMMINENT_WINDOW_DAYS días que
         la fuente principal ya no lista (CompararBonos omite un pago ya cortado para SU
-        liquidación, como TX28 el 05/11/2026). Fuente: cronogramas de Bull Market.
+        liquidación, como TX28 el 05/11/2026). Fuente: cronogramas de Bull Market o, sin sesión,
+        el calendario de próximos pagos de bonistas.com (`source`).
+
+        `only_with_flows`: no toca los bonos sin ningún flujo en la referencia (un bono con un
+        único pago suelto pasaría por tener cronograma completo y daría una TIR falsa).
         """
         from backend.app.services.market_calendar import ex_date
         today = today or date.today()
@@ -193,7 +203,7 @@ class ReferenceDataService:
         added: Dict[str, List[str]] = {}
         for sym, sch in schedules.items():
             ref = by_symbol.get(sym)
-            if ref is None:
+            if ref is None or (only_with_flows and not ref.flows):
                 continue
             ref_usd = (ref.currency or "").upper() == "USD"
             if ref_usd != (sch.currency == "USD"):
@@ -210,7 +220,8 @@ class ReferenceDataService:
             if ref.ticker_base in added:
                 ref.flows = sorted(new_flows)
                 check = dict(ref.flows_check or {})
-                check["pagos_proximos_bullmarket"] = added[ref.ticker_base]
+                key = f"pagos_proximos_{source.lower()}"
+                check[key] = sorted({*check.get(key, []), *added[ref.ticker_base]})
                 ref.flows_check = check
         db.commit()
         return added
@@ -270,11 +281,32 @@ class ReferenceDataService:
         self._secondary["BULLMARKET"] = {t: s for t, s in schedules.items() if t in provincial}
         merged = self.merge_provincial_schedules(db, self._secondary, today=today)
         merged["imminent"] = self.add_imminent_flows(db, schedules, today=today)
+        merged["imminent_bonistas"] = await self.add_bonistas_imminent_flows(db, today=today)
         merged["bullmarket_schedules"] = len(schedules)
         merged["bullmarket_errors"] = errors
         self.bullmarket_cashflows_day = today
         logger.info(f"Cronogramas Bull Market: {len(schedules)} bonos; pagos próximos agregados: {merged['imminent']}")
         return merged
+
+    async def add_bonistas_imminent_flows(self, db: Session, today: Optional[date] = None) -> Dict[str, Any]:
+        """
+        Pagos con corte inminente desde el calendario público de bonistas.com: cubre el caso TX28
+        aunque no haya sesión de Bull Market. Se corre después de los de Bull Market (si los hay),
+        así que solo agrega lo que siga faltando. Nunca lanza: si la fuente falla, devuelve {}.
+        """
+        try:
+            schedules = await self.bonistas_payments.get(today)
+            if not schedules:
+                return {}
+            added = self.add_imminent_flows(db, schedules, today=today, source="BONISTAS",
+                                            only_with_flows=True)
+            if added:
+                logger.info(f"Pagos próximos agregados desde bonistas.com: {added}")
+            return added
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Pagos próximos de bonistas.com: {e}")
+            return {}
 
     @staticmethod
     def store_macro(db: Session, items: Dict[str, MacroIndicatorCreate]) -> int:
@@ -339,6 +371,9 @@ class ReferenceDataService:
                 db.rollback()
                 logger.error(f"Consenso de cronogramas: {e}")
                 result["provincial_error"] = str(e)
+
+        if "reference_bonds" in result:
+            result["imminent_bonistas"] = await self.add_bonistas_imminent_flows(db)
 
         macro: Dict[str, MacroIndicatorCreate] = {}
         try:
